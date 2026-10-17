@@ -10,8 +10,7 @@ import { Button } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { colors, fonts, radii, spacing, type } from '../theme/tokens';
 import { formatTime } from '../utils/format';
-import { sendInviteViaRelay } from '../services/photon';
-import { config } from '../config/env';
+import { PARTY_ERROR_TEXT, type PartyErrorCode } from '../services/supabaseParty';
 import { t } from '../i18n/strings';
 import type { NearbyPlayer } from '../types';
 
@@ -21,6 +20,14 @@ const PROXIMITY_LABEL: Record<NearbyPlayer['proximity'], string> = {
   around: 'In the area',
 };
 
+const CONNECTION_LABEL = {
+  offline: 'Offline',
+  connecting: 'Connecting…',
+  simulated: 'Demo lobby',
+  connected: 'Live',
+  reconnecting: 'Reconnecting…',
+} as const;
+
 export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
   const s = useGameStore(
     useShallow((st) => ({
@@ -28,14 +35,17 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       party: st.party,
       chat: st.chat,
       nearby: st.nearbyPlayers,
+      partyError: st.partyError,
       quests: st.quests,
       activeQuest: st.activeQuest,
+      demoMode: st.settings.demoMode,
     })),
   );
   const a = useGameStore(
     useShallow((st) => ({
       connectParty: st.connectParty,
       createParty: st.createParty,
+      joinPartyByCode: st.joinPartyByCode,
       joinHostedParty: st.joinHostedParty,
       invitePlayer: st.invitePlayer,
       leaveParty: st.leaveParty,
@@ -44,7 +54,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     })),
   );
   const [draft, setDraft] = useState('');
-  const [shareNote, setShareNote] = useState<string | null>(null);
+  const [code, setCode] = useState('');
+  const [joining, setJoining] = useState(false);
   const chatScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
 
   useEffect(() => {
@@ -53,20 +64,24 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
 
   const party = s.party;
   const me = party?.members.find((m) => m.isSelf);
-  const partyQuest = party?.questId ? s.quests.find((q) => q.id === party.questId) : undefined;
+  const partyQuestTitle = party?.questTitle ?? (party?.questId ? s.quests.find((q) => q.id === party.questId)?.title : undefined);
   const spots = party ? party.capacity - party.members.length : 0;
+  const errorText = s.partyError ? (PARTY_ERROR_TEXT[s.partyError as PartyErrorCode] ?? PARTY_ERROR_TEXT.unknown) : null;
 
   const share = async () => {
-    const message = `Join my Thaw party${partyQuest ? ` for “${partyQuest.title}”` : ''}! Let's explore together – meet in a public spot.`;
+    if (!party?.code) return;
     try {
-      await Share.share({ message });
-      if (config.photon.relayUrl) {
-        const r = await sendInviteViaRelay(message);
-        setShareNote(r.ok ? 'Invite also sent through your Photon relay.' : `Relay: ${r.reason}`);
-      }
+      await Share.share({ message: `Join my Thaw party! Open Thaw → Party → Join with code: ${party.code}. Let’s meet somewhere public.` });
     } catch {
-      setShareNote('Sharing isn’t available on this device.');
+      // Share sheet dismissed or unavailable – nothing to do.
     }
+  };
+
+  const join = async () => {
+    setJoining(true);
+    const ok = await a.joinPartyByCode(code);
+    setJoining(false);
+    if (ok) setCode('');
   };
 
   const send = () => {
@@ -78,9 +93,9 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
 
   const status = (
     <Chip
-      label={s.connection === 'simulated' ? 'Simulated lobby' : s.connection === 'connecting' ? 'Connecting…' : s.connection}
-      icon={s.connection === 'connecting' ? 'timer-sand' : 'flask-outline'}
-      bg={colors.butterSoft}
+      label={CONNECTION_LABEL[s.connection]}
+      icon={s.demoMode ? 'flask-outline' : s.connection === 'connected' ? 'access-point' : 'timer-sand'}
+      bg={s.demoMode ? colors.butterSoft : s.connection === 'connected' ? colors.grassSoft : colors.paperDeep}
     />
   );
 
@@ -88,6 +103,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScreenShell title={t('party.title')} subtitle="Explore together, 2–4 players" tab right={status} keyboardShouldPersistTaps="handled">
         <Notice icon="shield-check-outline" text={t('party.safety')} />
+        {errorText && <Notice tone="warn" icon="alert-circle-outline" text={errorText} />}
 
         {!party ? (
           <>
@@ -102,49 +118,90 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               <Button label={t('party.create')} icon="account-plus" variant="sunset" onPress={a.createParty} style={{ alignSelf: 'stretch' }} />
             </Card>
 
-            <SectionTitle>{t('party.nearby')}</SectionTitle>
-            {s.connection !== 'simulated' ? (
-              <Text style={type.small}>Looking for explorers…</Text>
-            ) : s.nearby.length === 0 ? (
-              <EmptyState icon="account-search-outline" title="Nobody around right now." />
-            ) : (
-              s.nearby.map((p) => (
-                <Card key={p.id} tint={colors.paper} style={styles.playerRow}>
-                  <Critter hue={p.avatarHue} size={44} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={type.subheading}>
-                      {p.name} <Text style={type.small}>· Lv {p.level}</Text>
-                    </Text>
-                    <Text style={type.small}>
-                      {PROXIMITY_LABEL[p.proximity]} · {p.lookingFor}
-                    </Text>
-                    {p.isDemo && <Chip label={t('party.demoLabel')} icon="flask-outline" bg={colors.butterSoft} style={{ marginTop: 4 }} />}
-                  </View>
-                  <Button label="Join" compact variant="secondary" onPress={() => a.joinHostedParty(p.id)} />
-                </Card>
-              ))
+            {!s.demoMode && (
+              <Card tint={colors.paper} style={{ gap: spacing.sm }}>
+                <Text style={type.heading}>Join with a code</Text>
+                <Text style={type.small}>Ask a friend for their 6-letter party code.</Text>
+                <View style={styles.inputRow}>
+                  <TextInput
+                    value={code}
+                    onChangeText={(v) => setCode(v.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6))}
+                    placeholder="ABC123"
+                    placeholderTextColor={colors.inkFaint}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    maxLength={6}
+                    style={[styles.input, styles.codeInput]}
+                    accessibilityLabel="Party code"
+                    returnKeyType="go"
+                    onSubmitEditing={() => void join()}
+                  />
+                  <Button label="Join" compact onPress={() => void join()} loading={joining} disabled={code.length !== 6} />
+                </View>
+              </Card>
             )}
-            <Text style={[type.small, { textAlign: 'center' }]}>
-              Positions are shown only as rough distance – never exact locations. Real-time multiplayer needs a backend; this lobby is a local simulation.
-            </Text>
+
+            {s.demoMode && (
+              <>
+                <SectionTitle>{t('party.nearby')}</SectionTitle>
+                {s.connection !== 'simulated' ? (
+                  <Text style={type.small}>Looking for explorers…</Text>
+                ) : s.nearby.length === 0 ? (
+                  <EmptyState icon="account-search-outline" title="Nobody around right now." />
+                ) : (
+                  s.nearby.map((p) => (
+                    <Card key={p.id} tint={colors.paper} style={styles.playerRow}>
+                      <Critter hue={p.avatarHue} size={44} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={type.subheading}>
+                          {p.name} <Text style={type.small}>· Lv {p.level}</Text>
+                        </Text>
+                        <Text style={type.small}>
+                          {PROXIMITY_LABEL[p.proximity]} · {p.lookingFor}
+                        </Text>
+                        <Chip label={t('party.demoLabel')} icon="flask-outline" bg={colors.butterSoft} style={{ marginTop: 4 }} />
+                      </View>
+                      <Button label="Join" compact variant="secondary" onPress={() => a.joinHostedParty(p.id)} />
+                    </Card>
+                  ))
+                )}
+                <Text style={[type.small, { textAlign: 'center' }]}>Demo mode: these explorers are simulated on this device.</Text>
+              </>
+            )}
           </>
         ) : (
           <>
             <Card tint={colors.sunsetSoft} style={{ gap: spacing.sm }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={type.heading}>{party.name}</Text>
+                <Text style={[type.heading, { flex: 1 }]} numberOfLines={1}>
+                  {party.name}
+                </Text>
                 <Chip label={spots === 1 ? t('party.spot1') : spots > 0 ? t('party.spots', { n: spots }) : t('party.full')} bg={spots > 0 ? colors.white : colors.grass} />
               </View>
+
+              {party.code && (
+                <Pressable onPress={() => void share()} style={styles.codeBox} accessibilityRole="button" accessibilityLabel={`Party code ${party.code.split('').join(' ')}. Share invite.`}>
+                  <View>
+                    <Text style={type.tiny}>PARTY CODE</Text>
+                    <Text style={styles.code}>{party.code}</Text>
+                  </View>
+                  <MaterialCommunityIcons name="share-variant" size={24} color={colors.ink} />
+                </Pressable>
+              )}
+
               <View style={styles.members}>
                 {party.members.map((m) => (
-                  <View key={m.id} style={styles.member} accessible accessibilityLabel={`${m.name}${m.isSelf ? ' (you)' : ''}${m.isDemo ? ', demo participant' : ''}, ${m.ready ? 'ready' : 'not ready'}`}>
+                  <View key={m.id} style={styles.member} accessible accessibilityLabel={`${m.isSelf ? 'You' : m.name}${m.isHost ? ', host' : ''}${m.isDemo ? ', demo participant' : ''}, ${m.ready ? 'ready' : 'not ready'}`}>
                     <View style={[styles.memberAvatar, m.ready && { backgroundColor: colors.grassSoft, borderColor: colors.forest }]}>
                       <Critter hue={m.avatarHue} size={48} mood={m.ready ? 'happy' : 'sleepy'} />
                     </View>
                     <Text style={styles.memberName} numberOfLines={1}>
                       {m.isSelf ? 'You' : m.name}
                     </Text>
-                    <Text style={[styles.memberState, { color: m.ready ? colors.forest : colors.inkFaint }]}>{m.ready ? 'Ready' : 'Not ready'}</Text>
+                    <Text style={[styles.memberState, { color: m.ready ? colors.forest : colors.inkFaint }]}>
+                      {m.isHost ? '★ ' : ''}
+                      {m.ready ? 'Ready' : 'Not ready'}
+                    </Text>
                     {m.isDemo && <Text style={styles.demoTag}>demo</Text>}
                   </View>
                 ))}
@@ -159,7 +216,9 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               </View>
               <View style={styles.questRow}>
                 <MaterialCommunityIcons name="flag-variant" size={18} color={colors.ink} />
-                <Text style={[type.small, { flex: 1, color: colors.ink }]}>{partyQuest ? `Attempting: ${partyQuest.title}` : 'No quest chosen yet – pick a party quest on the map.'}</Text>
+                <Text style={[type.small, { flex: 1, color: colors.ink }]}>
+                  {partyQuestTitle ? `Attempting: ${partyQuestTitle}` : party.isHost === false ? 'Waiting for the host to pick a quest.' : 'No quest chosen yet – accept a party quest on the map.'}
+                </Text>
               </View>
               <View style={{ flexDirection: 'row', gap: spacing.sm }}>
                 <Button
@@ -170,13 +229,20 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
                   onPress={() => a.setReady(!me?.ready)}
                   style={{ flex: 1 }}
                 />
-                <Button label={partyQuest ? 'Open quest' : 'Find a quest'} icon="compass-outline" variant="secondary" compact style={{ flex: 1 }} onPress={() => (partyQuest && s.activeQuest?.questId === partyQuest.id ? navigation.navigate('ActiveQuest') : navigation.navigate('Explore'))} />
+                <Button
+                  label={s.activeQuest ? 'Open quest' : 'Find a quest'}
+                  icon="compass-outline"
+                  variant="secondary"
+                  compact
+                  style={{ flex: 1 }}
+                  onPress={() => (s.activeQuest ? navigation.navigate('ActiveQuest') : navigation.navigate('Explore'))}
+                />
               </View>
             </Card>
 
-            {spots > 0 && s.nearby.some((p) => !party.members.some((m) => m.id === p.id)) && (
+            {s.demoMode && spots > 0 && s.nearby.some((p) => !party.members.some((m) => m.id === p.id)) && (
               <View style={{ gap: spacing.sm }}>
-                <SectionTitle>Invite explorers</SectionTitle>
+                <SectionTitle>Invite demo explorers</SectionTitle>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
                   {s.nearby
                     .filter((p) => !party.members.some((m) => m.id === p.id))
@@ -191,20 +257,20 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               </View>
             )}
 
-            <Button label={t('party.share')} icon="share-variant" variant="secondary" compact onPress={() => void share()} />
-            {shareNote && <Notice text={shareNote} />}
+            {party.code && <Button label="Share invite code" icon="share-variant" variant="secondary" compact onPress={() => void share()} />}
 
             <Card tint={colors.white} style={{ gap: spacing.sm }}>
               <Text style={type.heading}>Party chat</Text>
               <ScrollView ref={chatScroll} style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 6 }} onContentSizeChange={() => chatScroll.current?.scrollToEnd({ animated: false })} nestedScrollEnabled>
+                {s.chat.length === 0 && <Text style={type.small}>Say hi and agree on a public spot to meet.</Text>}
                 {s.chat.map((m) =>
                   m.system ? (
                     <Text key={m.id} style={styles.system}>
                       {m.text}
                     </Text>
                   ) : (
-                    <View key={m.id} style={[styles.bubble, m.authorId === me?.id ? styles.mine : styles.theirs]}>
-                      {m.authorId !== me?.id && <Text style={styles.author}>{m.authorName}</Text>}
+                    <View key={m.id} style={[styles.bubble, m.authorId === 'self' || m.authorId === me?.id ? styles.mine : styles.theirs]}>
+                      {m.authorId !== 'self' && m.authorId !== me?.id && <Text style={styles.author}>{m.authorName}</Text>}
                       <Text style={type.body}>{m.text}</Text>
                       <Text style={styles.time}>{formatTime(m.at)}</Text>
                     </View>
@@ -217,7 +283,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
                   onChangeText={setDraft}
                   placeholder={t('party.chatPlaceholder')}
                   placeholderTextColor={colors.inkFaint}
-                  style={styles.input}
+                  style={[styles.input, { flex: 1 }]}
                   maxLength={280}
                   returnKeyType="send"
                   onSubmitEditing={send}
@@ -247,6 +313,18 @@ const styles = StyleSheet.create({
   memberName: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.ink },
   memberState: { fontFamily: fonts.bodySemi, fontSize: 11 },
   demoTag: { fontFamily: fonts.bodySemi, fontSize: 10, color: colors.inkSoft },
+  codeBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: colors.white,
+    borderWidth: 2,
+    borderColor: colors.ink,
+    borderStyle: 'dashed',
+    borderRadius: radii.md,
+    padding: spacing.md,
+  },
+  code: { fontFamily: fonts.displayBold, fontSize: 32, letterSpacing: 6, color: colors.ink },
   questRow: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center', backgroundColor: colors.white, padding: spacing.sm, borderRadius: radii.sm },
   invite: { alignItems: 'center', padding: spacing.sm, borderRadius: radii.md, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.paper, width: 96, minHeight: 44 },
   system: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.inkSoft, textAlign: 'center' },
@@ -257,7 +335,6 @@ const styles = StyleSheet.create({
   time: { fontFamily: fonts.body, fontSize: 10, color: colors.inkFaint, alignSelf: 'flex-end' },
   inputRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
   input: {
-    flex: 1,
     minHeight: 44,
     borderWidth: 2,
     borderColor: colors.ink,
@@ -268,5 +345,6 @@ const styles = StyleSheet.create({
     color: colors.ink,
     backgroundColor: colors.paper,
   },
+  codeInput: { flex: 1, fontFamily: fonts.display, fontSize: 22, letterSpacing: 4, textAlign: 'center' },
   send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.forest, borderWidth: 2, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
 });

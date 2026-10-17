@@ -28,6 +28,7 @@ export function RewardScreen({ navigation }: RootScreenProps<'Reward'>) {
   const player = useGameStore((s) => s.player);
   const progress = useGameStore((s) => s.progress);
   const clearLastReward = useGameStore((s) => s.clearLastReward);
+  const syncState = useGameStore((s) => s.syncState);
   const [xpShown, setXpShown] = useState(0);
 
   const header = usePop(0);
@@ -102,7 +103,11 @@ export function RewardScreen({ navigation }: RootScreenProps<'Reward'>) {
               <Text style={type.small}>{lp.toNext} XP to next</Text>
             </View>
             <ProgressBar fraction={lp.fraction} label="Level progress" />
-            {rank && <Text style={type.small}>You’re #{rank} on today’s local board.</Text>}
+            {reward.source === 'server' ? (
+              <Text style={type.small}>✓ Verified and saved to your account{syncState === 'synced' ? '' : ' (updating…)'}. Check the global board!</Text>
+            ) : (
+              rank && <Text style={type.small}>Demo sandbox: #{rank} on the demo board. Not counted on your account.</Text>
+            )}
           </Card>
         </Animated.View>
 

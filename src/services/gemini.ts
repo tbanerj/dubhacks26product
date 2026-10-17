@@ -1,16 +1,14 @@
 /**
- * Quest generation via Google Gemini (generateContent REST API, JSON mode), with a
- * deterministic local generator as fallback. The return shape is identical either way.
- *
- * Config: EXPO_PUBLIC_GEMINI_API_KEY (placeholder GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE).
- * Production note: a key bundled into the app is extractable; route this through a
- * backend proxy before shipping publicly.
+ * Quest generation. Gemini runs server-side in the `generate-quests` Edge Function (the API
+ * key never ships in the app). Every returned quest is re-validated and safety-filtered here,
+ * and any place without a valid AI quest gets one from the built-in templates. The return
+ * shape is identical either way, and this never throws.
  */
 import type { Landmark, LatLng, Quest } from '../types';
-import { config } from '../config/env';
 import { distanceMeters } from '../game/geo';
 import { RawQuestListSchema, validateQuest } from '../game/questSchema';
 import { generateLocalQuests, timeOfDay } from '../game/localQuests';
+import { supabase } from './supabase/client';
 
 export interface QuestRequest {
   landmarks: Landmark[];
@@ -20,116 +18,18 @@ export interface QuestRequest {
   partySize: number;
   preferSolo: boolean;
   mobilityFriendly: boolean;
+  /** Ask the server for AI quests (requires a signed-in session). */
+  useAi: boolean;
   now?: Date;
 }
 
 export interface QuestBatch {
   quests: Quest[];
   source: 'gemini' | 'local' | 'mixed';
-  /** Human-readable note when AI was unavailable or partially rejected. */
   note: string | null;
 }
 
-/** Gemini's OpenAPI-subset schema for structured output. */
-const RESPONSE_SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    quests: {
-      type: 'ARRAY',
-      items: {
-        type: 'OBJECT',
-        properties: {
-          landmarkId: { type: 'STRING' },
-          title: { type: 'STRING' },
-          description: { type: 'STRING' },
-          instructions: { type: 'ARRAY', items: { type: 'STRING' } },
-          soloAlternative: { type: 'STRING', nullable: true },
-          mode: { type: 'STRING', enum: ['solo', 'social', 'party'] },
-          minParty: { type: 'INTEGER' },
-          maxParty: { type: 'INTEGER' },
-          durationMin: { type: 'INTEGER' },
-          difficulty: { type: 'STRING', enum: ['easy', 'medium', 'hard'] },
-          xp: { type: 'INTEGER' },
-          collectible: {
-            type: 'OBJECT',
-            properties: {
-              theme: { type: 'STRING', enum: ['botanical', 'architecture', 'culture', 'hidden', 'cooperative', 'neighborhood'] },
-              rarity: { type: 'STRING', enum: ['common', 'uncommon', 'rare', 'legendary'] },
-              name: { type: 'STRING' },
-            },
-            required: ['theme', 'rarity', 'name'],
-          },
-          evidence: { type: 'STRING' },
-          safetyNotes: { type: 'ARRAY', items: { type: 'STRING' } },
-        },
-        required: ['landmarkId', 'title', 'description', 'instructions', 'mode', 'durationMin', 'difficulty', 'collectible', 'evidence'],
-      },
-    },
-  },
-  required: ['quests'],
-} as const;
-
-function buildPrompt(req: QuestRequest): string {
-  const tod = timeOfDay(req.now);
-  const places = req.landmarks.map((l) => ({
-    landmarkId: l.id,
-    name: l.name,
-    category: l.category,
-    distanceMeters: Math.round(distanceMeters(req.playerPosition, l.coordinate)),
-  }));
-  return [
-    'You design quests for Thaw, a real-world social exploration game that helps people feel less lonely in their city.',
-    `Context: region=${req.regionName ?? 'player location'}, locale=${req.localeHint}, local time of day=${tod}, current party size=${req.partySize}.`,
-    req.preferSolo ? 'The player prefers solo quests: make every quest mode "solo".' : 'Mix solo, social and party (2-4 players) quests.',
-    req.mobilityFriendly ? 'The player prefers low-mobility quests: little walking, no stairs, under 20 minutes.' : '',
-    'Write 1-2 quests per place below. Each quest must be specific to what that KIND of place actually offers (category + name), not a generic template.',
-    'Rules (hard requirements):',
-    '- Public, accessible areas only. No trespassing, restricted areas, roofs, edges, water entry, or isolated spots.',
-    '- Never require spending money, sharing contact details or personal info, or photographing strangers. Faces are never required.',
-    '- Social/party quests must be optional for strangers ("if someone is happy to") and MUST include a soloAlternative.',
-    '- Do not state facts about the place you are not certain of. Do not make cultural, religious or political assumptions or stereotypes.',
-    tod === 'night' ? '- It is night: prefer short quests in well-lit public spots, and suggest daylight for anything else.' : '',
-    '- Evidence must be a photo of an object, detail, composition, or consenting group arrangement.',
-    '- title ≤ 60 chars, description ≤ 200 chars, 1-4 instructions ≤ 180 chars each, collectible.name ≤ 40 chars.',
-    '- Use cooperative theme for party quests. XP: easy≈60, medium≈90, hard≈130.',
-    'Write in English (UI is English-only for now) but respect local names.',
-    `Places: ${JSON.stringify(places)}`,
-  ]
-    .filter(Boolean)
-    .join('\n');
-}
-
-interface GeminiResponse {
-  candidates?: { content?: { parts?: { text?: string }[] } }[];
-  promptFeedback?: { blockReason?: string };
-}
-
-async function callGemini(req: QuestRequest, signal: AbortSignal): Promise<unknown> {
-  const { apiKey, model, endpoint } = config.gemini;
-  if (!apiKey) throw new Error('Gemini not configured');
-  const res = await fetch(`${endpoint}/${encodeURIComponent(model)}:generateContent`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-    signal,
-    body: JSON.stringify({
-      contents: [{ role: 'user', parts: [{ text: buildPrompt(req) }] }],
-      generationConfig: {
-        responseMimeType: 'application/json',
-        responseSchema: RESPONSE_SCHEMA,
-        temperature: 0.9,
-        maxOutputTokens: 4096,
-      },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini HTTP ${res.status}`);
-  const json = (await res.json()) as GeminiResponse;
-  if (json.promptFeedback?.blockReason) throw new Error(`Gemini blocked: ${json.promptFeedback.blockReason}`);
-  const text = json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? '').join('') ?? '';
-  if (!text) throw new Error('Gemini returned no content');
-  return JSON.parse(text) as unknown;
-}
-
-function applyPreferences(quests: Quest[], req: QuestRequest): Quest[] {
+function applyPreferences(quests: Quest[], req: Pick<QuestRequest, 'preferSolo' | 'mobilityFriendly'>): Quest[] {
   return quests.filter((q) => {
     if (req.preferSolo && q.mode !== 'solo') return false;
     if (req.mobilityFriendly && (q.durationMin > 25 || q.difficulty === 'hard')) return false;
@@ -137,26 +37,45 @@ function applyPreferences(quests: Quest[], req: QuestRequest): Quest[] {
   });
 }
 
-export function isGeminiConfigured(): boolean {
-  return config.gemini.apiKey !== null;
+async function fetchAiQuests(req: QuestRequest): Promise<unknown> {
+  if (!supabase) throw new Error('unavailable');
+  const { data, error } = await supabase.functions.invoke('generate-quests', {
+    method: 'POST',
+    body: {
+      landmarks: req.landmarks.slice(0, 10).map((l) => ({
+        landmarkId: l.id,
+        name: l.name,
+        category: l.category,
+        distanceMeters: Math.round(distanceMeters(req.playerPosition, l.coordinate)),
+      })),
+      context: {
+        localeHint: req.localeHint,
+        regionName: req.regionName,
+        timeOfDay: timeOfDay(req.now),
+        partySize: req.partySize,
+        preferSolo: req.preferSolo,
+        mobilityFriendly: req.mobilityFriendly,
+      },
+    },
+  });
+  if (error) {
+    const status = (error as { context?: Response }).context?.status;
+    throw new Error(status === 503 ? 'unavailable' : status === 429 ? 'rate_limited' : 'failed');
+  }
+  return data;
 }
 
-/**
- * Generate quests for the given landmarks. Always resolves: falls back to the local
- * generator for any landmark Gemini didn't produce a valid, safe quest for.
- */
-export async function generateQuests(req: QuestRequest, timeoutMs = 20_000): Promise<QuestBatch> {
+export async function generateQuests(req: QuestRequest, timeoutMs = 25_000): Promise<QuestBatch> {
   const local = applyPreferences(generateLocalQuests(req.landmarks, { now: req.now }), req);
-  if (!isGeminiConfigured() || req.landmarks.length === 0) {
-    return { quests: local, source: 'local', note: null };
-  }
+  if (!req.useAi || req.landmarks.length === 0) return { quests: local, source: 'local', note: null };
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const raw = await callGemini({ ...req, landmarks: req.landmarks.slice(0, 10) }, controller.signal);
+    const raw = await Promise.race([
+      fetchAiQuests(req),
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timed out')), timeoutMs)),
+    ]);
     const list = RawQuestListSchema.safeParse(raw);
-    if (!list.success) throw new Error('Gemini output did not match the quest list schema');
+    if (!list.success) throw new Error('bad response');
 
     const byId = new Map(req.landmarks.map((l) => [l.id, l]));
     const ai: Quest[] = [];
@@ -171,17 +90,10 @@ export async function generateQuests(req: QuestRequest, timeoutMs = 20_000): Pro
     const fill = local.filter((q) => !covered.has(q.landmarkId));
     const quests = [...aiFiltered, ...fill];
     const source = aiFiltered.length === 0 ? 'local' : fill.length === 0 ? 'gemini' : 'mixed';
-    const note =
-      aiFiltered.length === 0
-        ? 'AI quests were unusable, so Thaw used its built-in quests.'
-        : rejected > 0
-          ? `${rejected} AI quest${rejected === 1 ? '' : 's'} failed safety or format checks and were replaced.`
-          : null;
+    const note = rejected > 0 && aiFiltered.length > 0 ? `${rejected} AI quest${rejected === 1 ? '' : 's'} failed safety checks and were replaced.` : null;
     return { quests, source, note };
-  } catch (e) {
-    const msg = controller.signal.aborted ? 'timed out' : e instanceof Error ? e.message : 'unknown error';
-    return { quests: local, source: 'local', note: `AI quests unavailable (${msg}). Using built-in quests.` };
-  } finally {
-    clearTimeout(timer);
+  } catch {
+    // Unavailable / offline / rate limited: the built-in quests are complete on their own.
+    return { quests: local, source: 'local', note: null };
   }
 }

@@ -37,6 +37,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   const party = useGameStore((s) => s.party);
   const { checkIn, simulateWalkTo, abandonQuest } = useGameStore.getState();
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
 
   const entry = world.active;
   if (!active || !entry) {
@@ -65,9 +66,12 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
     void Linking.openURL(url).catch(() => setCheckMsg('Couldn’t open a maps app on this device.'));
   };
 
-  const doCheckIn = () => {
-    const res = checkIn();
-    if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
+  const doCheckIn = async () => {
+    setChecking(true);
+    const res = await checkIn();
+    setChecking(false);
+    if (!res.ok && res.distanceM === null) setCheckMsg('Couldn’t get your current location. Make sure location is on and try again.');
+    else if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
     else setCheckMsg(null);
   };
 
@@ -94,7 +98,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
           </View>
           <ProgressBar fraction={inRange ? 1 : approach} color={colors.sunset} label="Distance progress" />
           <Text style={type.small}>Check in within {formatDistance(CHECK_IN_RADIUS_M, units)} of the spot. Watch the road, not your phone.</Text>
-          <Button label={t('active.checkIn')} icon="map-marker-check-outline" variant={inRange ? 'sunset' : 'secondary'} onPress={doCheckIn} />
+          <Button label={t('active.checkIn')} icon="map-marker-check-outline" variant={inRange ? 'sunset' : 'secondary'} onPress={() => void doCheckIn()} loading={checking} />
           {!inRange && <Button label="Walking directions" icon="directions" variant="ghost" compact onPress={openDirections} />}
           {!inRange && demoMode && (
             <Button

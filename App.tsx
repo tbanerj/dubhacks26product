@@ -12,6 +12,8 @@ import { useGameStore } from './src/store/useGameStore';
 import { colors } from './src/theme/tokens';
 import { setLanguage } from './src/i18n/strings';
 import { deviceLocale } from './src/utils/format';
+import { navigationRef } from './src/navigation/navigationRef';
+import { useAuthBootstrap } from './src/hooks/useAuthBootstrap';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 setLanguage(deviceLocale());
@@ -49,6 +51,7 @@ export default function App() {
   const hydrated = useHydrated();
   // If fonts fail to load (offline first run), continue with system fonts.
   const ready = (fontsLoaded || !!fontError) && hydrated;
+  useAuthBootstrap(hydrated);
 
   useEffect(() => {
     if (ready) void SplashScreen.hideAsync().catch(() => undefined);
@@ -66,7 +69,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <ErrorBoundary>
-        <NavigationContainer theme={navTheme}>
+        <NavigationContainer ref={navigationRef} theme={navTheme}>
           <StatusBar style="dark" />
           <RootNavigator />
         </NavigationContainer>

@@ -23,6 +23,7 @@ export function useWorld() {
       regionId: st.regionId,
       manualCenter: st.manualCenter,
       worldCenter: st.worldCenter,
+      demoMode: st.settings.demoMode,
       landmarks: st.landmarks,
       quests: st.quests,
       progress: st.progress,
@@ -32,9 +33,9 @@ export function useWorld() {
   );
 
   const position = useMemo(
-    () => playerPosition(s),
+    () => playerPosition({ ...s, settings: { demoMode: s.demoMode } }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [s.gpsPosition, s.simulatedPosition, s.locationMode, s.regionId, s.manualCenter, s.worldCenter],
+    [s.gpsPosition, s.simulatedPosition, s.locationMode, s.regionId, s.manualCenter, s.worldCenter, s.demoMode],
   );
 
   return useMemo(() => {
@@ -46,7 +47,7 @@ export function useWorld() {
       const d = distanceMeters(position.coordinate, lm.coordinate);
       const status = questStatus(q, s.progress, s.activeQuest, s.seenQuestIds);
       // Discovery is distance-based; the active quest always stays visible.
-      if (d > DISCOVERY_RADIUS_M && status !== 'active') continue;
+      if (position.kind !== 'none' && d > DISCOVERY_RADIUS_M && status !== 'active') continue;
       entries.push({ quest: q, landmark: lm, status, distanceM: d });
     }
     entries.sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed') || a.distanceM - b.distanceM);

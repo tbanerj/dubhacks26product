@@ -4,6 +4,8 @@
 
 Thaw is a real-world social adventure game. The map of wherever you are becomes a game board: public parks, libraries, squares, markets and public art turn into quest hubs. Accept a quest, walk there, check in, snap photo evidence, and earn XP plus an illustrated souvenir pin. Some quests are better with a party of 2–4, and every social quest has a solo option, so nobody has to approach a stranger.
 
+Accounts, cloud saves and global leaderboards run on **Supabase** (Postgres + Auth + an Edge Function).
+
 Built with React Native + Expo SDK 57 (expo 57.0.9, React Native 0.86, Expo Go), TypeScript (strict), React Navigation, Zustand, react-native-maps, expo-location, expo-image-picker, zod and react-native-svg.
 
 ---
@@ -58,12 +60,30 @@ npx expo start -c         # -c clears the cache; required after ANY .env change
 
 | Key in `.env` | Where to get it | What changes when set | How to confirm it works |
 |---|---|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` + `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | **Already filled in `.env.example`** for our project (`rxtllandrfntemhiyzun`). The publishable key is designed to ship in apps, because Row Level Security protects the data. Never use the `secret`/`service_role` key in the app | Accounts, verified email, cloud saves, global leaderboards | **You → Integrations** shows *Supabase … Live*, and the welcome card shows "I have an account – sign in" |
 | `EXPO_PUBLIC_GEMINI_API_KEY` | [Google AI Studio → Get API key](https://aistudio.google.com/apikey) (free tier is enough) | Quests near you are written by Gemini (`EXPO_PUBLIC_GEMINI_MODEL`, default `gemini-2.5-flash`) | Tap **↻ Refresh quests** on the map. Cards show an **AI** chip, and quest detail says "Quest written by Gemini". If the call fails, a yellow note on the map says why, and built-in quests are used. |
 | `EXPO_PUBLIC_PERCEPTRON_API_KEY` | From the Perceptron team (DubHacks workshop) or their developer dashboard | Photo evidence is really analysed. Base URL `https://api.perceptron.inc/v1` and model `perceptron-mk1.5` are overridable | The verify screen's note changes from "Demo mode: verification is simulated" to "sent to Perceptron". Submit a matching photo (should pass) and an unrelated one (should fail with the model's observations). |
 | `EXPO_PUBLIC_PHOTON_RELAY_URL` | URL of **our own** relay server (not built yet; see "Photon" below). The Photon key lives on that server, never in the app | **Share invite** also POSTs `{ "message": "..." }` to `<relay>/invites` | The party screen shows "Invite also sent through your Photon relay", or the relay's error. |
 | `EXPO_PUBLIC_OVERPASS_URL` | Leave the default unless rate-limited; alternatives are listed at wiki.openstreetmap.org/wiki/Overpass_API | Source of real nearby places when using **Use my location** | Use my location → hubs have real local names and show "· OSM" in the hub card. |
 
 > ⚠️ Anything prefixed `EXPO_PUBLIC_` is compiled into the app and can be extracted by anyone who has the build. Use throwaway or demo keys with spending caps for the hackathon, and rotate them afterwards.
+
+
+### 2b. Supabase dashboard settings (one-time, project owner)
+
+These live in the Supabase dashboard ([project](https://supabase.com/dashboard/project/rxtllandrfntemhiyzun)). They can't be set from code.
+
+1. **Authentication → Sign In / Providers → Email:**
+   - **Confirm email: ON.** This is what makes players prove their email. It's normally on by default; double-check it.
+   - **Minimum password length: 8**, and require letters + digits, to match the app's own check.
+   - (Pro plan) turn on **leaked password protection**.
+2. **Authentication → URL Configuration:**
+   - **Site URL:** `thaw://`
+   - **Redirect URLs:** add `thaw://**`, `exp://**` and `http://localhost:8081/**`. Expo Go uses `exp://` links, real builds use `thaw://`, and the web preview uses localhost. Without these, links in emails can't open the app. The email still gets verified either way, and the player just signs in manually.
+3. **Authentication → Emails → SMTP Settings: set up custom SMTP before anyone outside the team signs up.** ⚠️ Supabase's built-in email sender **only delivers to members of the Supabase organization** (anyone else gets "Email address not authorized") and is heavily rate-limited. Any provider works; Resend, Postmark, Brevo and Amazon SES all have free tiers. Until then, add teammates/judges to the org (**Organization → Team**) so their verification emails arrive.
+4. **Authentication → Rate Limits:** review the email and sign-up limits once custom SMTP is on.
+
+Nothing else is needed: the database schema, security policies and the `delete-account` Edge Function are already deployed. Their source is in `supabase/`.
 
 ### 3. Test checklist (on a real phone)
 
@@ -99,6 +119,19 @@ Do this once with **no keys** and once **with keys**. Mark each line pass or fai
 | 26 | Perceptron live | With key: submit a matching and a non-matching photo | Pass and fail respectively, with observations |
 | 27 | Accessibility | Turn on VoiceOver/TalkBack and the largest text size | Pins, cards and buttons are announced; text scales without overlapping |
 | 28 | Both platforms | Repeat 1, 8, 12, 16 on iOS **and** Android | Custom markers render; Android map uses the warm paper style |
+| 29 | Sign up | You → **Create account** with a team-member email (see 2b.3) | "Check your inbox" screen; email arrives |
+| 30 | Verify email | Tap the link in the email on the phone | App opens and you're signed in. If it opens on a laptop instead, go back and tap **I've verified – sign in** |
+| 31 | Unverified sign-in | Sign in before verifying | "Please verify your email first", then the Check-inbox screen with **Resend** |
+| 32 | Wrong password | Sign in with a wrong password | "Email or password is incorrect." |
+| 33 | Cloud save | Signed in: complete a quest → You tab | Chip shows **Synced**; the Ranks tab shows the **Global** board with you on it |
+| 34 | Second device | Sign in on another phone (or web) | Same XP, pins, streak, history, name and avatar colour |
+| 35 | Offline sync | Airplane mode → complete a quest → turn network back on → reopen the app | "1 quest waiting to sync", then **Synced**; XP counted once |
+| 36 | Duplicate protection | Complete the same quest on two devices | Second device gets no extra XP (server says duplicate) |
+| 37 | Rate limit | Complete two quests within 20 seconds | Second one queues and syncs on its own ~20 s later |
+| 38 | Rename | Change name/colour on You tab | Global leaderboard shows the new name/colour |
+| 39 | Forgot password | Sign in → **Forgot password?** → open link on the phone | "Choose a new password" screen → saving signs you in |
+| 40 | Sign out | You → **Sign out** | Guest progress from before sign-in comes back; Ranks shows the local demo board |
+| 41 | Delete account | You → **Delete account** → confirm | Signed out; signing in again fails; the player is gone from the global board |
 
 Also run `npm run typecheck && npm run lint && npm test` before every push.
 
@@ -106,12 +139,16 @@ If something fails, note the step number, the platform, and a screenshot. JS err
 
 ### 4. Production readiness
 
-**Today the app is a hackathon demo, not a production app.** These are the remaining items, in priority order. None are done yet.
+**Today the app is a hackathon demo, not a production app.** These are the remaining items, in priority order. Item 2 (accounts + server-side state) is done; the rest are open.
 
 **Must-have before any public release**
 
 1. **Backend proxy for AI keys.** Add a small server (Vercel/Cloudflare Functions, Supabase Edge Functions, etc.) with `POST /quests` → Gemini and `POST /verify` → Perceptron. Move the keys there, add per-user rate limiting, then change the URLs in `src/services/gemini.ts` and `src/services/perceptron.ts`. Remove `EXPO_PUBLIC_GEMINI_API_KEY` and `EXPO_PUBLIC_PERCEPTRON_API_KEY` from the app entirely.
-2. **Accounts + server-side game state.** Today XP and pins live only on the device, so anyone can tamper with them. Add auth (Supabase Auth, Firebase Auth, or Clerk) and a database with tables for players, completions, collectibles and xp_by_day. Make the server the authority: verification and the `applyCompletion` rules (`src/game/progression.ts` is pure and portable) must run server-side. The client only displays results.
+2. ✅ **Accounts + server-side game state — done.** Supabase Auth with verified email, server-authoritative XP, streaks, pins and leaderboards, RLS on every table, account deletion. See "Database" below. **Still open on this front:**
+   - **Custom SMTP** (see 2b.3). Without it, only team members can verify their email.
+   - **Photo verification still isn't enforced by the server.** `complete_quest` trusts that the client verified the photo. To close that hole, move the Perceptron call into an Edge Function that verifies the photo and *then* calls `complete_quest` with the service key, and revoke `complete_quest` from `authenticated`.
+   - **Quest legitimacy.** Quests are generated on the device, so a modified client could invent quest IDs. Server XP is bounded (≤180 per quest, 1 per 20 s, 40 per day), so the damage is capped, but the real fix is generating and storing quests server-side (item 14) and having `complete_quest` only accept known quest IDs, ideally with a server-side distance check against the player's reported location.
+   - **Guest → account merge.** Guest progress isn't uploaded on sign-up (it can't be trusted), so new accounts start at 0 XP.
 3. **Real multiplayer.** Implement `PartyService` (`src/services/photon.ts`) over a realtime backend (Supabase Realtime, Firebase, Ably, or our own WebSockets). Keep the privacy rule that only coarse proximity buckets ever reach other clients. Use the Photon agent for SMS/iMessage invites through the relay.
 4. **Trust & safety.** Add report and block for players and chat messages, chat moderation (a server-side text filter or model), an age gate (13+ or local equivalent), a Terms of Service, a privacy policy (location + camera + photo processing), and an account/data deletion flow. These are app store requirements.
 5. **Builds.** Move from Expo Go to **EAS Build** (`npm i -g eas-cli && eas build:configure`). Set the bundle IDs in `app.json`. For Android, add a Google Maps API key under `android.config.googleMaps.apiKey`, because Google Maps needs it outside Expo Go. Upgrade Expo to the latest SDK 57 patch (`npx expo install expo@~57.0.30 && npx expo install --fix`; currently pinned at 57.0.9 on purpose).
@@ -129,7 +166,9 @@ If something fails, note the step number, the platform, and a screenshot. JS err
 **Nice-to-have**
 
 13. Replace demo leaderboard rivals with real friends or region boards. Add weekly seasons.
-14. Server-generated, cached quests per place, so every player at the same spot sees the same quests and AI costs stay bounded.
+14. Server-generated, cached quests per place, so every player at the same spot sees the same quests, AI costs stay bounded, and `complete_quest` can validate quest IDs.
+16. Leaderboard scale: today ranks are computed on request. That's fine for thousands of players. Past that, cache them (a materialized view refreshed by `pg_cron`, or a Redis sorted set) and use Supabase **Realtime** for live rank changes.
+17. Database ops: upgrade to a paid plan for **daily backups + point-in-time recovery**. Use **Supabase branching** or a staging project for schema changes. Write future migrations with the Supabase CLI (`supabase migration new`) so they're tracked in `supabase_migrations`. The current one was applied over the MCP connector, and its exact SQL is in `supabase/migrations/`.
 15. Push notifications for party invites and streak reminders, opt-in only.
 
 ---
@@ -142,7 +181,8 @@ If something fails, note the step number, the platform, and a screenshot. JS err
 | Quests | Original local templates keyed to the *kind* of place (garden ≠ library ≠ market), time-of-day aware, deterministic IDs | **Gemini** (`generateContent`, JSON schema mode). Every AI quest is zod-validated and safety-filtered, and anything rejected is replaced by a local quest |
 | Photo verification | **Transparent mock.** The UI says it's simulated, and the photo never leaves the device | **Perceptron** chat-completions API (`POST /v1/chat/completions`, image as a data URI), with timeout, one retry and a parsed verdict |
 | Party / presence | Deterministic local lobby. Demo participants are always labelled "demo". Membership, ready states and chat work | See "Photon" below |
-| Leaderboards | Local: your real progress vs labelled demo profiles. The app never calls this a global board | (backend needed) |
+| Accounts | Guest mode: progress on this device only | **Supabase Auth**: email + password, email verification, password reset, sign out, delete account |
+| Leaderboards | Local: your real progress vs labelled demo profiles, labelled "Local demo" | **Global** boards from Supabase (today / all-time / quests / places), computed on the server |
 
 The app never presents simulated data as real. Demo participants are marked as demo, verification says "Simulated", the position chip shows **Sample location** / **Simulated position** / **Your location**, and map attribution notes demo places.
 
@@ -173,6 +213,35 @@ The DubHacks '26 sponsor **Photon 2.0** (photon.co) is a platform for *messaging
 Per the hacker guide, the Photon track requires a project "built on Photon 2.0 and live on at least one Photon channel". The app alone does not meet that. It needs the relay agent.
 
 ---
+
+## Database (Supabase)
+
+Project `rxtllandrfntemhiyzun` (Postgres 17, us-east-1). The schema is in [`supabase/migrations/20261017220000_thaw_core.sql`](supabase/migrations/20261017220000_thaw_core.sql), and the Edge Function in [`supabase/functions/delete-account`](supabase/functions/delete-account/index.ts). Generated types are in `src/services/supabase/database.types.ts`.
+
+| Table | What | Client access |
+|---|---|---|
+| `profiles` | display name, avatar colour | read own; update own `display_name`/`avatar_hue` only (column-level grant) |
+| `player_stats` | total XP, quests, places, streak | read own |
+| `completions` | one row per rewarded quest, `unique(user_id, quest_id)` | read own |
+| `collectibles` | pins | read own |
+| `daily_xp` | XP per player per *local* day | read own |
+| `visited_landmarks` | first visits (for the first-visit bonus) | read own |
+
+**Security model.** RLS is on for every table. Clients can never INSERT/UPDATE/DELETE game data. The only write path is `rpc('complete_quest')`, which runs on the server and:
+- computes XP (easy 60 / medium 90 / hard 130, + party bonus ≤30 but never for solo quests, + 20 for a first visit). It ignores any XP number the client might send;
+- is **idempotent** per (player, quest): retries and duplicates return `duplicate: true` and grant nothing;
+- **rate-limits** (1 completion per 20 s, 40 per local day) and validates every input;
+- computes streaks and daily XP in the player's IANA time zone (bad zones fall back to UTC);
+- locks the player's stats row so concurrent submits can't double-count.
+
+`get_leaderboard(kind, day, limit≤100)` and `get_my_rank` return **only** display name, avatar colour and score: no user IDs, no emails. Privileged code lives in an unexposed `private` schema behind `SECURITY INVOKER` wrappers. `anon` has no access to anything. New users get a profile + stats row from an `auth.users` trigger. Deleting the auth user cascades to all game data.
+
+**How it was verified (on the live project).**
+- An SQL test transaction (rolled back) checked profile bootstrap, name sanitising, XP maths, the solo party-bonus rule, duplicates, the rate limit, input and null validation, denied direct writes, denied protected columns, cross-user isolation, leaderboard/rank output, day-window validation, and `anon` denial.
+- An end-to-end run over the real HTTP API with supabase-js covered sign-in (and a wrong password), RPCs, forged writes (HTTP 42501), rename, global and daily boards, and account deletion through the Edge Function (sign-in fails afterwards, all rows cascade-deleted).
+- Supabase **security advisor: 0 findings.** The performance advisor only flags two leaderboard indexes as unused, which is expected with no data yet.
+
+**App sync.** Completions show their reward instantly, then go into a persisted queue that `flushPending()` submits. It retries on network errors and rate limits, and drops (with a note) on the daily cap or invalid input. Afterwards `pullCloud()` replaces local progress with the server's numbers, so the server always wins. Guest progress is set aside on sign-in and restored on sign-out.
 
 ## Architecture
 
@@ -211,14 +280,16 @@ Key decisions:
 ```bash
 npm run typecheck   # tsc, strict + noUncheckedIndexedAccess
 npm run lint        # eslint-config-expo (incl. React Compiler rules)
-npm test            # jest-expo: 49 tests
+npm test            # jest-expo: 71 tests
 ```
 
 The tests cover level thresholds and their inverse, streaks, daily XP pruning, idempotent completion, duplicate collectibles, party bonus, quest schema validation, unsafe-content rejection, solo-alternative enforcement, local generation for every category and region (including Unicode names), deterministic IDs, night behaviour, Gemini success/partial/malformed/HTTP-error/offline fallbacks (mocked fetch), the demo verifier's accept/reject, the party service (capacity 4, ready, chat, leave), leaderboard ranking, and a store-level end-to-end loop (accept → check-in gate → reject → complete once → persisted → reset → region switch).
 
 ## Verified vs not verified
 
-- ✅ Typecheck, lint, and all 49 tests pass.
+- ✅ Typecheck, lint, and all 71 tests pass.
+- ✅ Supabase schema, RLS, RPCs and the delete-account Edge Function were tested against the live project (see "Database").
+- ✅ Web: sign-in screen, validation and a real wrong-password round-trip to Supabase.
 - ✅ In a browser at phone size (Expo web): the first-run card, map board, quest detail, accept, the too-far check-in message, simulated walk, check-in, photo pick and preview, simulated reject then retry, accept → reward screen, collection, leaderboard, party (create/invite/ready/chat), profile, persistence across reload, and region switching all work.
 - ⚠️ **Not run on a physical device or simulator yet.** Native map rendering (custom markers, pitch, Google map style on Android, `mutedStandard` on iOS), camera capture, GPS permission flows and haptics still need checking in Expo Go.
 - ⚠️ The live Gemini, Perceptron and Overpass paths were only exercised with mocked `fetch` (Gemini) or not at all (Perceptron, Overpass), because no keys were available. The Perceptron request format follows docs.perceptron.inc (model `perceptron-mk1.5`). Confirm it at the Perceptron workshop.

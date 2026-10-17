@@ -128,7 +128,8 @@ export function applyCompletion(progress: Progress, input: CompletionInput): Com
 
   const now = input.now ?? new Date();
   const today = localDayKey(now);
-  const partySize = Math.max(1, Math.min(4, Math.floor(input.partySize)));
+  // Solo quests never earn a party bonus (mirrors the server rule in complete_quest).
+  const partySize = quest.mode === 'solo' ? 1 : Math.max(1, Math.min(4, Math.floor(input.partySize)));
   const newLandmark = !progress.visitedLandmarkIds.includes(quest.landmarkId);
 
   const xpGained = quest.xp + partyBonus(partySize) + (newLandmark ? FIRST_VISIT_BONUS : 0);

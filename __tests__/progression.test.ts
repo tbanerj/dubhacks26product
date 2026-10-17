@@ -138,6 +138,11 @@ describe('applyCompletion', () => {
     expect(reward?.xpGained).toBe(60 + 30 + FIRST_VISIT_BONUS);
   });
 
+  it('never gives a party bonus on solo quests (matches the server)', () => {
+    const { reward } = applyCompletion(emptyProgress(), { quest: quest(), landmarkName: 'Park', partySize: 4, now });
+    expect(reward?.xpGained).toBe(60 + FIRST_VISIT_BONUS);
+  });
+
   it('reports level-ups', () => {
     const p = { ...emptyProgress(), totalXp: 90 };
     const { reward } = applyCompletion(p, { quest: quest(), landmarkName: 'Park', partySize: 1, now });

@@ -1,7 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { haptic } from '../utils/haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { RootScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
@@ -11,23 +10,28 @@ import { Card, EmptyState, Notice } from '../components/Paper';
 import { Button } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { colors, fonts, radii, spacing, type } from '../theme/tokens';
-import { isPerceptronConfigured, verifyEvidence, type EvidenceImage } from '../services/perceptron';
-import type { VerificationResult } from '../types';
+import { verifyDemo, verifyWithServer, type VerifyOutcome } from '../services/verification';
+import { haptic } from '../utils/haptics';
 import { t } from '../i18n/strings';
 
-type Phase = { kind: 'capture' } | { kind: 'checking' } | { kind: 'rejected'; result: VerificationResult } | { kind: 'error'; message: string };
+type Phase =
+  | { kind: 'capture' }
+  | { kind: 'checking' }
+  | { kind: 'rejected'; feedback: string; observations: string | null }
+  | { kind: 'error'; message: string; canRetry: boolean };
 
 export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
   const world = useWorld();
   const active = useGameStore((s) => s.activeQuest);
   const demoMode = useGameStore((s) => s.settings.demoMode);
+  const hue = useGameStore((s) => s.player.avatarHue);
   const completeActiveQuest = useGameStore((s) => s.completeActiveQuest);
-  const [image, setImage] = useState<EvidenceImage | null>(null);
+  const applyServerReward = useGameStore((s) => s.applyServerReward);
+  const [imageUri, setImageUri] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'capture' });
   const [pickError, setPickError] = useState<string | null>(null);
   const [demoOutcome, setDemoOutcome] = useState<'accept' | 'reject'>('accept');
   const submitting = useRef(false);
-  const live = isPerceptronConfigured();
 
   const entry = world.active;
   if (!active || !entry) {
@@ -50,44 +54,61 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
     try {
       const perm = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        setPickError(source === 'camera' ? 'Camera permission is off. You can choose a photo from your library instead, or enable it in Settings.' : 'Photo access is off. Enable it in Settings, or use the camera.');
+        setPickError(source === 'camera' ? 'Camera access is off. Enable it in Settings, or choose a photo instead.' : 'Photo access is off. Enable it in Settings, or use the camera.');
         return;
       }
-      const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6, base64: live, allowsEditing: false, exif: false };
+      const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.8, allowsEditing: false, exif: false };
       const res = source === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
-      if (res.canceled) return;
-      const asset = res.assets[0];
-      if (!asset) return;
-      setImage({ uri: asset.uri, base64: asset.base64 ?? null, mimeType: asset.mimeType ?? 'image/jpeg' });
+      if (res.canceled || !res.assets[0]) return;
+      setImageUri(res.assets[0].uri);
       setPhase({ kind: 'capture' });
     } catch (e) {
-      setPickError(source === 'camera' ? 'The camera isn’t available here (simulators have none). Try choosing a photo instead.' : `Couldn’t open photos: ${e instanceof Error ? e.message : 'unknown error'}`);
+      setPickError(source === 'camera' ? 'The camera isn’t available here. Try choosing a photo instead.' : `Couldn’t open photos: ${e instanceof Error ? e.message : 'unknown error'}`);
     }
   };
 
+  const handleOutcome = (o: VerifyOutcome) => {
+    if (o.kind === 'error') {
+      if (o.code === 'quest_rate_limited' || o.code === 'network' || o.code === 'unavailable' || o.code === 'rate_limited') setPhase({ kind: 'error', message: o.message, canRetry: true });
+      else setPhase({ kind: 'error', message: o.message, canRetry: false });
+      return;
+    }
+    if (o.kind === 'rejected') {
+      haptic.warning();
+      setPhase({ kind: 'rejected', feedback: o.feedback, observations: o.observations });
+      return;
+    }
+    // Accepted.
+    if (demoMode) {
+      const done = completeActiveQuest({ accepted: true, confidence: o.confidence, feedback: o.feedback, observations: o.observations, source: 'demo' });
+      if (!done.ok) {
+        setPhase({ kind: 'error', message: 'This quest was already completed.', canRetry: false });
+        return;
+      }
+    } else {
+      if (!o.reward) {
+        setPhase({ kind: 'error', message: 'Your photo passed, but the reward couldn’t be confirmed. Pull to refresh your profile.', canRetry: false });
+        return;
+      }
+      if (o.reward.duplicate) {
+        useGameStore.setState({ activeQuest: null });
+        setPhase({ kind: 'error', message: 'You’ve already completed this quest – rewards are only granted once.', canRetry: false });
+        return;
+      }
+      applyServerReward(o.reward);
+    }
+    haptic.success();
+    setImageUri(null); // Thaw doesn't keep evidence photos.
+    navigation.replace('Reward');
+  };
+
   const submit = async () => {
-    if (!image || submitting.current) return; // guard double-taps
+    if (!imageUri || submitting.current) return; // guard double-taps
     submitting.current = true;
     setPhase({ kind: 'checking' });
     try {
-      const res = await verifyEvidence({ quest: entry.quest, landmarkName: entry.landmark.name, image }, { demoOutcome });
-      if (!res.ok) {
-        setPhase({ kind: 'error', message: res.error.message });
-        return;
-      }
-      if (!res.result.accepted) {
-        haptic.warning();
-        setPhase({ kind: 'rejected', result: res.result });
-        return;
-      }
-      const done = completeActiveQuest(res.result);
-      if (done.ok) {
-        haptic.success();
-        setImage(null); // drop the photo reference; Thaw doesn't keep evidence photos
-        navigation.replace('Reward');
-      } else {
-        setPhase({ kind: 'error', message: done.reason === 'duplicate' ? 'This quest was already completed – rewards are only granted once.' : 'This quest is no longer active.' });
-      }
+      const outcome = demoMode ? await verifyDemo(demoOutcome) : await verifyWithServer(entry.quest, entry.landmark.name, imageUri);
+      handleOutcome(outcome);
     } finally {
       submitting.current = false;
     }
@@ -95,26 +116,34 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
 
   return (
     <ScreenShell title={t('verify.title')} subtitle={entry.quest.title} back>
-      <Notice tone={live ? 'info' : 'demo'} icon={live ? 'shield-check-outline' : 'flask-outline'} text={live ? t('verify.liveNote') : t('verify.demoNote')} />
+      <Notice
+        tone={demoMode ? 'demo' : 'info'}
+        icon={demoMode ? 'flask-outline' : 'shield-check-outline'}
+        text={
+          demoMode
+            ? 'Demo mode: the check is simulated and your photo never leaves this device.'
+            : 'Your photo is checked by Google Gemini on Thaw’s server for this quest only and isn’t stored. Location data is stripped before upload.'
+        }
+      />
 
       <Card tint={colors.white} style={{ gap: spacing.sm }}>
         <Text style={type.tiny}>WHAT TO CAPTURE</Text>
         <Text style={type.body}>{entry.quest.evidence}</Text>
-        <Text style={type.small}>No faces needed. Only photograph people who have said yes.</Text>
+        <Text style={type.small}>No faces needed. Only photograph people who have said yes. Screenshots won’t pass.</Text>
       </Card>
 
       {phase.kind === 'checking' ? (
         <Card tint={colors.butterSoft} style={styles.checking}>
-          <Critter hue={useGameStore.getState().player.avatarHue} size={80} mood="wow" />
+          <Critter hue={hue} size={80} mood="wow" />
           <Text style={type.heading} accessibilityLiveRegion="polite">
             {t('verify.checking')}
           </Text>
-          <Text style={type.small}>{live ? 'Asking Perceptron to look at your photo.' : 'Running the simulated demo check.'}</Text>
+          <Text style={type.small}>{demoMode ? 'Running the simulated demo check.' : 'Gemini is looking at your photo…'}</Text>
         </Card>
-      ) : image ? (
+      ) : imageUri ? (
         <View style={{ gap: spacing.sm }}>
           <View style={styles.polaroid}>
-            <Image source={{ uri: image.uri }} style={styles.photo} accessibilityLabel="Your evidence photo" resizeMode="cover" />
+            <Image source={{ uri: imageUri }} style={styles.photo} accessibilityLabel="Your evidence photo" resizeMode="cover" />
             <Text style={styles.caption} numberOfLines={1}>
               {entry.landmark.name}
             </Text>
@@ -142,13 +171,13 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
       {phase.kind === 'rejected' && (
         <Card tint={colors.sunsetSoft} style={{ gap: spacing.xs }}>
           <Text style={type.heading}>{t('verify.rejected')}</Text>
-          <Text style={type.body}>{phase.result.feedback}</Text>
-          {phase.result.observations && <Text style={type.small}>Seen: {phase.result.observations}</Text>}
+          <Text style={type.body}>{phase.feedback}</Text>
+          {phase.observations && <Text style={type.small}>Seen: {phase.observations}</Text>}
         </Card>
       )}
-      {phase.kind === 'error' && <Notice tone="warn" icon="wifi-off" text={`${phase.message} Your photo is still here – try again.`} />}
+      {phase.kind === 'error' && <Notice tone="warn" icon="alert-circle-outline" text={phase.message} />}
 
-      {!live && demoMode && phase.kind !== 'checking' && (
+      {demoMode && phase.kind !== 'checking' && (
         <Card tint={colors.paper} style={{ gap: spacing.xs }}>
           <Text style={type.tiny}>DEMO: NEXT SIMULATED RESULT</Text>
           <View style={styles.segment} accessibilityRole="radiogroup">
@@ -168,16 +197,17 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
         </Card>
       )}
 
-      {phase.kind !== 'checking' && (
+      {phase.kind !== 'checking' && !(phase.kind === 'error' && !phase.canRetry) && (
         <Button
           label={phase.kind === 'rejected' || phase.kind === 'error' ? t('verify.retry') : t('verify.submit')}
           icon="send"
           variant="sunset"
-          disabled={!image}
+          disabled={!imageUri}
           onPress={() => void submit()}
-          accessibilityHint={image ? undefined : 'Take or choose a photo first'}
+          accessibilityHint={imageUri ? undefined : 'Take or choose a photo first'}
         />
       )}
+      {phase.kind === 'error' && !phase.canRetry && <Button label="Back to the map" variant="secondary" onPress={() => navigation.navigate('Tabs', { screen: 'Explore' })} />}
     </ScreenShell>
   );
 }

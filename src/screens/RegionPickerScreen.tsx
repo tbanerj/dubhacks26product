@@ -13,12 +13,11 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
   const regionId = useGameStore((s) => s.regionId);
   const mode = useGameStore((s) => s.locationMode);
   const permission = useGameStore((s) => s.permission);
-  const { setRegion, enableGps, finishOnboarding } = useGameStore.getState();
+  const { setRegion, enableGps } = useGameStore.getState();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const pick = (id: string) => {
-    finishOnboarding();
     void setRegion(id);
     navigation.goBack();
   };
@@ -26,7 +25,6 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
   const gps = async () => {
     setBusy(true);
     setError(null);
-    finishOnboarding();
     const res = await enableGps();
     setBusy(false);
     if (res.ok) navigation.goBack();
@@ -34,7 +32,7 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
   };
 
   return (
-    <ScreenShell title="Where to explore?" subtitle="Real location, or a sample city anywhere on Earth" back>
+    <ScreenShell title="Demo regions" subtitle="Demo mode sandbox – sample data, not counted on the global board" back>
       <Card tint={colors.grassSoft} style={{ gap: spacing.sm }}>
         <Text style={type.heading}>Play where you are</Text>
         <Text style={type.small}>Thaw finds public parks, libraries, squares and art near you via OpenStreetMap. Approximate location, only while the app is open.</Text>
