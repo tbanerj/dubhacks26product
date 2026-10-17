@@ -1,0 +1,23 @@
+{
+  "name": "photon",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "bun src/index.ts",
+    "dev": "bun --watch src/index.ts",
+    "messaging:dev": "bun src/index.ts",
+    "messaging:demo": "THAW_TRANSPORT=demo bun src/index.ts",
+    "messaging:seed": "bun src/scripts/seed.ts",
+    "messaging:reset-demo": "bun src/scripts/reset-demo.ts",
+    "messaging:test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "spectrum-ts": "^12.11.0"
+  },
+  "devDependencies": {
+    "typescript": "^5",
+    "@types/bun": "latest"
+  }
+}

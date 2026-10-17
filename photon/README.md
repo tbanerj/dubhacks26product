@@ -1,0 +1,118 @@
+# Thaw on Photon
+
+Text Thaw and it will help you pick a small public adventure, send one photo, and earn XP and a collectible. The tagline is "The world gets warmer when you show up."
+
+This folder is the messaging service. There is no Expo app in the repository. The phone connection is stable Spectrum Cloud iMessage (`spectrum-ts` 12.11.0), not Photon Engine and not the Photon beta API.
+
+- Docs: https://photon.codes/docs/spectrum-ts/getting-started
+- iMessage provider: https://photon.codes/docs/spectrum-ts/providers/imessage
+- Dashboard: https://app.photon.codes
+
+## What talks to Photon
+
+`src/messaging/photon.ts` is the only live adapter. It listens to Spectrum's message stream, ignores outbound echoes and group chats, and sends replies with `space.send`. After a restart it loads the saved conversation id and serving line and sends through `space.get`. Quest rules, rewards, and photo checks do not import Spectrum.
+
+`THAW_TRANSPORT=demo` uses the same rules with two fictional players, Ada and Ben. They are not nearby people.
+
+## Setup
+
+Requirements: Bun 1.4 or newer. SQLite is built into Bun. No Postgres service is required.
+
+```sh
+cd photon
+bun install
+```
+
+Copy `.env.example` to `.env` if you do not already have one. For live iMessage, set `PROJECT_ID` and `PROJECT_SECRET` from the project Settings page. Do not commit `.env`.
+
+| Variable | Where it lives | Purpose |
+| --- | --- | --- |
+| `PROJECT_ID`, `PROJECT_SECRET` | Server only | Stable Spectrum credentials. `SPECTRUM_PROJECT_ID` and `SPECTRUM_PROJECT_SECRET` are aliases. |
+| `THAW_TRANSPORT` | Server | `photon` or `demo`. Defaults to `photon` when a project id is set. |
+| `THAW_VERIFIER` | Server | `demo` only. `live` refuses to start. |
+| `THAW_DATABASE_PATH` | Server | SQLite file. Default `data/thaw.sqlite`. |
+| `THAW_MEDIA_DIR` | Server | Private photo files. Default `data/media`. |
+| `PORT` | Server | Local API, default `3001`, bound to `127.0.0.1`. |
+| `THAW_DEV_API` | Server | `1` enables the development linking header. Photon mode leaves this off unless you set it. |
+| `THAW_*` image and timezone settings | Server | Limits and the default timezone `America/Los_Angeles`. Thaw does not guess a timezone from a phone number. |
+
+Nothing from this service is safe to put in a public client bundle. The development header `x-thaw-dev-user` is not production login.
+
+## Commands
+
+```sh
+bun run messaging:seed        # create the local database
+bun run messaging:demo        # text as Ada or Ben, no credentials
+bun run messaging:dev         # photon if credentials exist, otherwise demo
+bun start                     # same as messaging:dev
+bun run messaging:test        # unit tests
+bun run typecheck
+bun run messaging:reset-demo  # delete demo-scoped players only
+```
+
+Demo CLI commands: `/as ada`, `/as ben`, `/scenario success|mismatch|unavailable`, `/photo`, `/reset`, `/quit`.
+
+`/scenario` only works in the demo transport. A real iMessage cannot type its way into a passing photo check.
+
+## Play by iMessage
+
+1. Stop any older `bun start` so only one stream is connected.
+2. Run `bun start` from this folder.
+3. In the Photon dashboard, open the project's iMessage line. On a shared plan, different people can be routed through different numbers. Do not hardcode one number.
+4. Shared plans must list each opted-in tester as a project user before Thaw can reply. Adding a Thaw profile does not do this. If a reply fails with `Target not allowed for this project`, add that phone or email on the dashboard and text again.
+5. Text the line: a place, then `1`, `2`, or `3`, then one JPEG or PNG.
+6. The result starts with `Demo verification` until a real checker is configured.
+
+Group chats are ignored. Thaw does not read or share anyone's live location.
+
+## Photos
+
+JPEG and PNG are accepted. The checker reads the file bytes, rejects empty files, files over `THAW_MAX_IMAGE_BYTES` (10 MB), and images over `THAW_MAX_IMAGE_PIXELS`. JPEG comment and EXIF-style APP segments are dropped from the stored copy. PNG ancillary chunks are dropped.
+
+HEIC is detected and refused with a resend instruction. It is not converted. Automated tests cover a 1×1 PNG, a tiny JPEG, HEIC detection, and an oversized frame. A physical iPhone send was not re-run in this change.
+
+Stored files are removed after `THAW_MEDIA_RETENTION_HOURS` (24). The quest result stays. Deleting Thaw's copy does not delete the picture from Messages or from Photon.
+
+A photo with no active quest is not checked and does not award XP.
+
+## Rewards and reminders
+
+XP and collectibles are written in one database transaction. Each quest pays once. A failed send keeps the reward and retries the reply up to 5 times. Timeout and network errors are stored as `delivery_unknown` and retried. This is not exactly-once delivery.
+
+`REMIND 15` stores one reminder for the active quest. A newer request replaces it. Completion, `CANCEL`, `STOP`, or a reminder more than 6 hours late cancels it. The process checks the database every 15 seconds, including after a restart.
+
+`STOP` opts the player out and suppresses queued sends. `START` resumes. Earned progress stays.
+
+## App linking
+
+There is no mobile app in this repo. With `THAW_DEV_API=1` these local routes use the header `x-thaw-dev-user: <name>`:
+
+- `GET /health` and `GET /ready` (no header)
+- `GET /api/me/progress`
+- `POST /api/me/messaging/link` issues an 8-character code for 10 minutes
+- text `LINK` and that code
+- `POST /api/me/messaging/link-confirm`
+- `DELETE /api/me/messaging/link` drops future app access and does not erase earned history
+
+Five failed code attempts lock that chat for the code window. Codes are stored as hashes.
+
+## Logs and shutdown
+
+Logs are JSON on stdout. They include event names and message ids, not message text, photos, or credentials. `SIGINT` or `SIGTERM` closes the Spectrum stream.
+
+Run this as a long-lived Bun process. Do not put the listener behind a request that returns immediately. Photon webhooks are not enabled.
+
+The SQLite file and `data/media` must live on a disk that survives restarts. A container's ephemeral disk is not enough for photos or quest state.
+
+## Not wired
+
+- Perceptron, or any live image model. `THAW_VERIFIER=live` exits with an error instead of pretending a photo passed.
+- Gemini quest generation. Three local templates are used for every place.
+- Outgoing collectible images.
+- An Expo screen. Linking is the HTTP stand-in above.
+
+## Tests
+
+`bun run messaging:test` covers the local loop: first contact, two players, ambiguous places, stable quest numbers across a restart, photo-before-quest, one reward, duplicates, mismatch, unavailable verification, replay refusal, cancel during verification, STOP, reminder delivery, bad images, link codes, and media cleanup.
+
+Live handset delivery was proven earlier for the text echo. This build has not been rechecked on a phone after the quest loop replaced that echo.
