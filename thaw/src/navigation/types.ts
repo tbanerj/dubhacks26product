@@ -6,8 +6,7 @@ export type TabParamList = {
   Explore: { focusLandmarkId?: string } | undefined;
   Party: undefined;
   Collection: undefined;
-  Leaderboard: undefined;
-  Profile: undefined;
+  You: undefined;
 };
 
 export type RootStackParamList = {
@@ -17,6 +16,10 @@ export type RootStackParamList = {
   Verify: undefined;
   Reward: undefined;
   RegionPicker: undefined;
+  Leaderboard: undefined;
+  Settings: undefined;
+  EditAvatar: undefined;
+  PartyChat: undefined;
 };
 
 export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;

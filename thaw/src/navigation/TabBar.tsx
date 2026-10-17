@@ -4,85 +4,79 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { haptic } from '../utils/haptics';
-import { colors, fonts, radii, spacing } from '../theme/tokens';
+import { useTheme } from '../theme/useTheme';
 import type { IconName } from '../theme/palette';
 import { t, type StringKey } from '../i18n/strings';
 import { useGameStore } from '../store/useGameStore';
+import { unseenCollectibleCount, unreadChatCount } from '../game/attention';
+import { GlassSurface } from '../components/GlassSurface';
 
 const TABS: Record<string, { icon: IconName; iconActive: IconName; label: StringKey }> = {
   Explore: { icon: 'compass-outline', iconActive: 'compass', label: 'tabs.explore' },
   Party: { icon: 'account-group-outline', iconActive: 'account-group', label: 'tabs.party' },
-  Collection: { icon: 'pin-outline', iconActive: 'pin', label: 'tabs.collection' },
-  Leaderboard: { icon: 'trophy-outline', iconActive: 'trophy', label: 'tabs.leaderboard' },
-  Profile: { icon: 'account-circle-outline', iconActive: 'account-circle', label: 'tabs.profile' },
+  Collection: { icon: 'book-outline', iconActive: 'book-open-variant', label: 'tabs.collection' },
+  You: { icon: 'account-outline', iconActive: 'account', label: 'tabs.profile' },
 };
 
-/** Floating paper tab bar with a sticker-style active tab. */
+/** Glass tab bar. Badges are unread chat and unseen pins, not running totals. */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const partyCount = useGameStore((s) => s.party?.members.length ?? 0);
-  const pins = useGameStore((s) => s.progress.collectibles.length);
+  const { colors, type } = useTheme();
+  const unread = useGameStore((s) => unreadChatCount(s.chat, s.lastChatReadAt, s.player.id));
+  const unseen = useGameStore((s) => unseenCollectibleCount(s.progress.collectibles, s.seenCollectibleIds));
 
   return (
-    <View style={[styles.outer, { paddingBottom: Math.max(insets.bottom, spacing.sm) }]}>
-      <View style={styles.bar} accessibilityRole="tablist">
-        {state.routes.map((route, index) => {
-          const focused = state.index === index;
-          const cfg = TABS[route.name];
-          if (!cfg) return null;
-          const badge = route.name === 'Party' && partyCount > 0 ? String(partyCount) : route.name === 'Collection' && pins > 0 ? String(pins) : null;
-          const label = t(cfg.label);
-          return (
-            <Pressable
-              key={route.key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: focused }}
-              accessibilityLabel={badge ? `${label}, ${badge}` : label}
-              onPress={() => {
-                const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
-                if (!focused && !event.defaultPrevented) {
-                  haptic.tap();
-                  navigation.navigate(route.name, undefined);
-                }
-              }}
-              style={styles.tab}
-            >
-              <View style={[styles.iconWrap, focused && styles.iconWrapActive]}>
-                <MaterialCommunityIcons name={focused ? cfg.iconActive : cfg.icon} size={24} color={focused ? colors.ink : colors.inkSoft} />
-                {badge && (
-                  <View style={styles.badge}>
-                    <Text style={styles.badgeText}>{badge}</Text>
-                  </View>
-                )}
-              </View>
-              <Text style={[styles.label, focused && styles.labelActive]} numberOfLines={1}>
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+    <View style={[styles.outer, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <GlassSurface style={styles.bar}>
+        <View style={styles.row} accessibilityRole="tablist">
+          {state.routes.map((route, index) => {
+            const focused = state.index === index;
+            const cfg = TABS[route.name];
+            if (!cfg) return null;
+            const count = route.name === 'Party' ? unread : route.name === 'Collection' ? unseen : 0;
+            const badge = count > 0 ? (count > 9 ? '9+' : String(count)) : null;
+            const label = t(cfg.label);
+            return (
+              <Pressable
+                key={route.key}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: focused }}
+                accessibilityLabel={badge ? `${label}, ${badge} new` : label}
+                onPress={() => {
+                  const event = navigation.emit({ type: 'tabPress', target: route.key, canPreventDefault: true });
+                  if (!focused && !event.defaultPrevented) {
+                    haptic.tap();
+                    navigation.navigate(route.name, undefined);
+                  }
+                }}
+                style={styles.tab}
+              >
+                <View style={[styles.iconWrap, focused && { backgroundColor: colors.sageSoft }]}>
+                  <MaterialCommunityIcons name={focused ? cfg.iconActive : cfg.icon} size={22} color={focused ? colors.primary : colors.textSecondary} />
+                  {badge && (
+                    <View style={[styles.badge, { backgroundColor: colors.primary }]}>
+                      <Text style={[styles.badgeText, { color: colors.onPrimary }]}>{badge}</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={[type.tiny, { color: focused ? colors.primary : colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={1.3}>
+                  {label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </GlassSurface>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  outer: { backgroundColor: 'transparent', paddingHorizontal: spacing.md, position: 'absolute', left: 0, right: 0, bottom: 0 },
-  bar: {
-    flexDirection: 'row',
-    backgroundColor: colors.paper,
-    borderRadius: radii.xl,
-    borderWidth: 2,
-    borderBottomWidth: 5,
-    borderColor: colors.ink,
-    paddingVertical: spacing.xs,
-    paddingHorizontal: spacing.xs,
-  },
+  outer: { position: 'absolute', left: 12, right: 12, bottom: 0 },
+  bar: { borderRadius: 28, overflow: 'hidden' },
+  row: { flexDirection: 'row', paddingVertical: 6, paddingHorizontal: 6 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 56, gap: 2 },
   iconWrap: { width: 46, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  iconWrapActive: { backgroundColor: colors.butter, borderWidth: 2, borderColor: colors.ink },
-  label: { fontFamily: fonts.bodySemi, fontSize: 11, color: colors.inkSoft },
-  labelActive: { fontFamily: fonts.bodyBold, color: colors.ink },
   badge: {
     position: 'absolute',
     top: -4,
@@ -91,14 +85,18 @@ const styles = StyleSheet.create({
     height: 18,
     borderRadius: 9,
     paddingHorizontal: 4,
-    backgroundColor: colors.sunset,
-    borderWidth: 1.5,
-    borderColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  badgeText: { fontFamily: fonts.bodyBold, fontSize: 10, color: colors.ink },
+  badgeText: { fontSize: 10, fontWeight: '700' },
 });
 
-/** Height to pad scroll content so it clears the floating tab bar. */
-export const TAB_BAR_SPACE = 100;
+/** Body of the floating bar, excluding the home-indicator inset. */
+export const TAB_BAR_BODY = 72;
+
+export function tabBarOffset(bottomInset: number): number {
+  return TAB_BAR_BODY + Math.max(bottomInset, 8) + 16;
+}
+
+/** Fallback for call sites that have not measured the inset yet. */
+export const TAB_BAR_SPACE = 108;

@@ -10,7 +10,7 @@ const en = {
   tagline: 'The world gets warmer when you show up.',
   'tabs.explore': 'Explore',
   'tabs.party': 'Party',
-  'tabs.collection': 'Pins',
+  'tabs.collection': 'Collection',
   'tabs.leaderboard': 'Ranks',
   'tabs.profile': 'You',
 
@@ -49,17 +49,19 @@ const en = {
   'verify.retake': 'Retake',
   'verify.submit': 'Submit evidence',
   'verify.checking': 'Checking your evidence…',
+  'verify.checkingLive': 'Asking Gemini to look at your photo.',
+  'verify.checkingDemo': 'Running the simulated demo check.',
   'verify.demoNote': 'Demo mode: verification is simulated. Your photo stays on this device and is not analysed.',
-  'verify.liveNote': 'Your photo is sent to Perceptron for verification and isn’t stored by Thaw.',
+  'verify.liveNote': 'Your photo is sent to Gemini for verification and isn’t stored by Thaw.',
   'verify.rejected': 'Not quite!',
   'verify.retry': 'Try again',
 
   'reward.title': 'Quest complete!',
   'reward.levelUp': 'Level up! You’re now level {level}.',
   'reward.newPin': 'New pin unlocked',
-  'reward.collection': 'See collection',
+  'reward.collection': 'View collection',
   'reward.ranks': 'See rankings',
-  'reward.done': 'Back to the map',
+  'reward.done': 'Explore nearby',
 
   'party.title': 'Party',
   'party.create': 'Start a party',
@@ -76,7 +78,7 @@ const en = {
   'party.share': 'Share invite',
   'party.safety': 'Meet only in public places. Never share your address or contact details. You can leave any time.',
 
-  'collection.title': 'Pin collection',
+  'collection.title': 'Collection',
   'collection.locked': 'Locked',
   'collection.empty': 'Complete a quest to earn your first pin.',
 

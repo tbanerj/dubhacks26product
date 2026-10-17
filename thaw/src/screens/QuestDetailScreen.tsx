@@ -5,11 +5,11 @@ import type { RootScreenProps } from '../navigation/types';
 import { useGameStore, partySizeOf } from '../store/useGameStore';
 import { useWorld } from '../hooks/useWorld';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, Chip, EmptyState, Notice } from '../components/Paper';
+import { Card, EmptyState, MetaRow, Notice } from '../components/Paper';
 import { Button } from '../components/Button';
 import { PinArt } from '../components/PinArt';
-import { CATEGORY_STYLE, MODE_STYLE, RARITY_STYLE, THEME_STYLE } from '../theme/palette';
-import { colors, spacing, type } from '../theme/tokens';
+import { MODE_STYLE, RARITY_STYLE, THEME_STYLE } from '../theme/palette';
+import { useTheme } from '../theme/useTheme';
 import { formatDistance } from '../utils/format';
 import { walkingMinutes } from '../game/geo';
 import { t } from '../i18n/strings';
@@ -17,6 +17,7 @@ import { t } from '../i18n/strings';
 export function QuestDetailScreen({ navigation, route }: RootScreenProps<'QuestDetail'>) {
   const { questId } = route.params;
   const world = useWorld();
+  const { colors, type } = useTheme();
   const entry = world.entries.find((e) => e.quest.id === questId);
   const units = useGameStore((s) => s.settings.units);
   const party = useGameStore((s) => s.party);
@@ -39,7 +40,6 @@ export function QuestDetailScreen({ navigation, route }: RootScreenProps<'QuestD
   }
 
   const { quest, landmark, status, distanceM } = entry;
-  const cat = CATEGORY_STYLE[landmark.category];
   const mode = MODE_STYLE[quest.mode];
   const partySize = partySizeOf(party);
   const partyShort = quest.mode === 'party' && partySize < quest.minParty;
@@ -66,119 +66,96 @@ export function QuestDetailScreen({ navigation, route }: RootScreenProps<'QuestD
     doAccept(solo);
   };
 
-  return (
-    <ScreenShell title={quest.title} subtitle={`${cat.label} · ${landmark.name}`} back>
-      <Card tint={colors.white} style={{ gap: spacing.md }}>
-        <View style={styles.chips}>
-          <Chip label={mode.label} icon={mode.icon} bg={mode.bg} fg={mode.fg} />
-          <Chip label={quest.difficulty[0]!.toUpperCase() + quest.difficulty.slice(1)} icon="signal-cellular-outline" />
-          <Chip label={`~${quest.durationMin} min`} icon="timer-outline" />
-          <Chip label={`${quest.xp} XP`} icon="lightning-bolt-outline" bg={colors.butterSoft} />
-          {quest.mode !== 'solo' && <Chip label={`${quest.minParty}–${quest.maxParty} players`} icon="account-group" />}
-        </View>
-        <Text style={type.body}>{quest.description}</Text>
-        <View style={styles.where}>
-          <MaterialCommunityIcons name={cat.icon} size={22} color={cat.color} />
-          <View style={{ flex: 1 }}>
-            <Text style={type.bodyStrong}>{landmark.name}</Text>
-            <Text style={type.small}>
-              {formatDistance(distanceM, units)} away · about {walkingMinutes(distanceM)} min walk
-              {landmark.blurb ? ` · ${landmark.blurb}` : ''}
-            </Text>
-          </View>
-        </View>
-        <Button
-          label="Show on map"
-          icon="map-marker-radius"
-          variant="secondary"
-          compact
-          onPress={() => navigation.navigate('Tabs', { screen: 'Explore', params: { focusLandmarkId: landmark.id } })}
-        />
-      </Card>
+  const footer = (
+    <View style={{ gap: 8 }}>
+      {status === 'completed' ? (
+        <Button label={t('quest.completed')} icon="check-decagram" disabled onPress={() => undefined} />
+      ) : status === 'active' ? (
+        <Button label={t('quest.continue')} onPress={() => navigation.replace('ActiveQuest')} />
+      ) : partyShort ? (
+        <>
+          <Button label={t('quest.findParty')} onPress={() => navigation.navigate('Tabs', { screen: 'Party' })} />
+          {quest.soloAlternative ? <Button label={t('quest.playSolo')} variant="secondary" onPress={() => confirmAccept(true)} /> : null}
+        </>
+      ) : (
+        <>
+          <Button label={quest.mode === 'solo' ? 'Start quest' : t('quest.accept')} onPress={() => confirmAccept(false)} />
+          {quest.mode !== 'solo' && quest.soloAlternative ? <Button label={t('quest.playSolo')} variant="secondary" onPress={() => confirmAccept(true)} /> : null}
+        </>
+      )}
+      <Button label="Show on map" variant="secondary" onPress={() => navigation.navigate('Tabs', { screen: 'Explore', params: { focusLandmarkId: landmark.id } })} />
+    </View>
+  );
 
-      <Card tint={colors.paper} style={{ gap: spacing.sm }}>
+  return (
+    <ScreenShell title={quest.title} subtitle={landmark.name} back footer={footer}>
+      <View style={[styles.hero, { backgroundColor: colors.sageSoft }]}>
+        <PinArt theme={quest.collectible.theme} rarity={quest.collectible.rarity} size={120} />
+      </View>
+      <MetaRow
+        items={[
+          { icon: mode.icon, label: mode.label },
+          { icon: 'walk', label: `${walkingMinutes(distanceM)} min walk` },
+          { icon: 'timer-outline', label: `${quest.durationMin} min` },
+          { icon: 'star-four-points-outline', label: `${quest.xp} XP` },
+        ]}
+      />
+      <Text style={type.body}>{quest.description}</Text>
+      <Text style={type.small}>
+        {formatDistance(distanceM, units)} away{landmark.blurb ? ` · ${landmark.blurb}` : ''}
+      </Text>
+
+      <Card style={{ gap: 12 }}>
         <Text style={type.heading}>How to complete it</Text>
         {quest.instructions.map((step, i) => (
           <View key={i} style={styles.step}>
-            <View style={styles.stepNum}>
-              <Text style={type.bodyStrong}>{i + 1}</Text>
+            <View style={[styles.stepNum, { backgroundColor: colors.sageSoft }]}>
+              <Text style={[type.bodyStrong, { color: colors.primary }]}>{i + 1}</Text>
             </View>
             <Text style={[type.body, { flex: 1 }]}>{step}</Text>
           </View>
         ))}
-        <View style={styles.evidence}>
-          <MaterialCommunityIcons name="camera-outline" size={18} color={colors.forest} />
-          <Text style={[type.small, { flex: 1, color: colors.ink }]}>Evidence: {quest.evidence}</Text>
-        </View>
-        {quest.soloAlternative && (
-          <View style={styles.evidence}>
-            <MaterialCommunityIcons name="walk" size={18} color={colors.forest} />
-            <Text style={[type.small, { flex: 1, color: colors.ink }]}>Solo option: {quest.soloAlternative}</Text>
-          </View>
-        )}
       </Card>
 
-      <Card tint={THEME_STYLE[quest.collectible.theme].base} style={styles.reward}>
-        <PinArt theme={quest.collectible.theme} rarity={quest.collectible.rarity} size={84} />
+      <Card style={{ gap: 8 }}>
+        <View style={styles.evidence}>
+          <MaterialCommunityIcons name="camera-outline" size={18} color={colors.primary} />
+          <Text style={[type.body, { flex: 1 }]}>Evidence: {quest.evidence}</Text>
+        </View>
+        {quest.soloAlternative ? (
+          <View style={styles.evidence}>
+            <MaterialCommunityIcons name="walk" size={18} color={colors.primary} />
+            <Text style={[type.body, { flex: 1 }]}>Solo option: {quest.soloAlternative}</Text>
+          </View>
+        ) : null}
+      </Card>
+
+      <Card style={styles.reward}>
+        <PinArt theme={quest.collectible.theme} rarity={quest.collectible.rarity} size={64} />
         <View style={{ flex: 1, gap: 2 }}>
-          <Text style={type.tiny}>COLLECTIBLE REWARD</Text>
-          <Text style={type.heading}>{quest.collectible.name}</Text>
+          <Text style={type.tiny}>Collectible</Text>
+          <Text style={type.subheading}>{quest.collectible.name}</Text>
           <Text style={type.small}>
             {RARITY_STYLE[quest.collectible.rarity].label} · {THEME_STYLE[quest.collectible.theme].label}
           </Text>
         </View>
       </Card>
 
-      {quest.safetyNotes.length > 0 && (
-        <View style={{ gap: spacing.xs }}>
-          {quest.safetyNotes.map((n, i) => (
-            <Notice key={i} icon="shield-check-outline" text={n} />
-          ))}
-        </View>
-      )}
-
+      {(partyShort || needsParty) && <Notice tone="warn" icon="account-group" text={`${t('quest.needsParty', { min: quest.minParty, max: quest.maxParty })} Your party: ${partySize}.`} />}
+      {quest.safetyNotes.map((n, i) => (
+        <Notice key={i} icon="shield-check-outline" text={n} />
+      ))}
       <Text style={[type.small, { textAlign: 'center' }]}>
         {quest.source === 'gemini' ? 'Quest written by Gemini, then safety-checked by Thaw.' : 'Built-in Thaw quest.'} Place details may be incomplete; trust posted signs on site.
       </Text>
-
-      {status === 'completed' ? (
-        <Button label={t('quest.completed')} icon="check-decagram" disabled onPress={() => undefined} />
-      ) : status === 'active' ? (
-        <Button label={t('quest.continue')} icon="flag-checkered" variant="sunset" onPress={() => navigation.replace('ActiveQuest')} />
-      ) : (
-        <View style={{ gap: spacing.sm }}>
-          {(partyShort || needsParty) && <Notice tone="warn" icon="account-group" text={`${t('quest.needsParty', { min: quest.minParty, max: quest.maxParty })} Your party: ${partySize}.`} />}
-          {partyShort ? (
-            <>
-              <Button label={t('quest.findParty')} icon="account-plus" variant="sunset" onPress={() => navigation.navigate('Tabs', { screen: 'Party' })} />
-              {quest.soloAlternative && <Button label={t('quest.playSolo')} icon="walk" variant="secondary" onPress={() => confirmAccept(true)} />}
-            </>
-          ) : (
-            <>
-              <Button label={t('quest.accept')} icon="flag-variant" variant="sunset" onPress={() => confirmAccept(false)} />
-              {quest.mode !== 'solo' && quest.soloAlternative && <Button label={t('quest.playSolo')} icon="walk" variant="ghost" onPress={() => confirmAccept(true)} />}
-            </>
-          )}
-        </View>
-      )}
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  where: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-  step: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start' },
-  stepNum: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.butter,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  evidence: { flexDirection: 'row', gap: spacing.sm, alignItems: 'flex-start', backgroundColor: colors.white, padding: spacing.sm, borderRadius: 10 },
-  reward: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
+  hero: { height: 180, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  stepNum: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  evidence: { flexDirection: 'row', gap: 8, alignItems: 'flex-start' },
+  reward: { flexDirection: 'row', gap: 12, alignItems: 'center' },
 });

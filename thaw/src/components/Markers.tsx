@@ -4,7 +4,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { LandmarkCategory } from '../types';
 import type { HubState } from '../game/questStatus';
 import { CATEGORY_STYLE, type IconName } from '../theme/palette';
-import { colors, fonts } from '../theme/tokens';
+import { colors } from '../theme/tokens';
 import { Critter } from './Critter';
 
 const BADGE: Record<HubState, { icon: IconName; bg: string } | null> = {
@@ -41,7 +41,7 @@ export function HubMarker({ category, state, selected }: { category: LandmarkCat
         style={[
           styles.head,
           { width: head, height: head, borderRadius: head / 2, backgroundColor: done ? colors.paperDeep : cat.color },
-          selected && { borderWidth: 3 },
+          selected && { borderColor: colors.forest, borderWidth: 4 },
         ]}
       >
         <View style={[styles.inner, { width: head - 12, height: head - 12, borderRadius: (head - 12) / 2, backgroundColor: done ? colors.paper : colors.paper }]}>
@@ -77,27 +77,22 @@ export function PlayerMarker({ hue, label }: { hue: number; label?: string }) {
 const styles = StyleSheet.create({
   hubWrap: { alignItems: 'center', justifyContent: 'flex-start', padding: 10 },
   halo: { position: 'absolute', top: 1, backgroundColor: colors.sunset, opacity: 0.3 },
-  head: { borderWidth: 2.5, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
-  inner: { alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: colors.ink },
+  head: { borderWidth: 3, borderColor: colors.white, alignItems: 'center', justifyContent: 'center', zIndex: 2 },
+  inner: { alignItems: 'center', justifyContent: 'center' },
   tail: {
-    width: 14,
-    height: 14,
-    marginTop: -9,
+    width: 12,
+    height: 12,
+    marginTop: -8,
     transform: [{ rotate: '45deg' }],
-    borderRightWidth: 2.5,
-    borderBottomWidth: 2.5,
-    borderColor: colors.ink,
     zIndex: 1,
   },
   badge: {
     position: 'absolute',
     top: 4,
     right: 2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: colors.ink,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 3,
@@ -111,5 +106,5 @@ const styles = StyleSheet.create({
     paddingVertical: 1,
     borderRadius: 6,
   },
-  playerTagText: { color: colors.paper, fontFamily: fonts.bodyBold, fontSize: 10 },
+  playerTagText: { color: colors.paper, fontWeight: '700', fontSize: 10 },
 });

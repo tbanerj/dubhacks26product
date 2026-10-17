@@ -111,7 +111,7 @@ export interface RewardSummary {
   streak: number;
 }
 
-export type VerificationSource = 'perceptron' | 'demo';
+export type VerificationSource = 'gemini' | 'demo';
 
 export interface VerificationResult {
   accepted: boolean;

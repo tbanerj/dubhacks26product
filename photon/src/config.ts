@@ -39,7 +39,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
 
   if (verifier === "live") {
     throw new Error(
-      "THAW_VERIFIER=live is not available. This repository has no verified Perceptron (or other) image API contract, so a live verifier is not wired. Set THAW_VERIFIER=demo. Demo results are labeled as simulated.",
+      "THAW_VERIFIER=live is not available. Photo checks in this messaging service stay simulated. The Expo app sends photos to Gemini. Set THAW_VERIFIER=demo.",
     );
   }
   if (transport === "photon" && (!projectId || !projectSecret)) {

@@ -33,6 +33,8 @@ import { deviceUnitSystem, clampText, deviceLocale, type UnitSystem } from '../u
 
 export type WorldStatus = 'idle' | 'loading' | 'ready' | 'error';
 
+export type AppearancePreference = 'system' | 'light' | 'dark';
+
 export interface Settings {
   units: UnitSystem;
   preferSolo: boolean;
@@ -40,6 +42,8 @@ export interface Settings {
   /** Demo helpers (simulated walking, simulated verification outcomes). */
   demoMode: boolean;
   onboarded: boolean;
+  /** System, light, or dark. Missing values from older saves resolve to system. */
+  appearance: AppearancePreference;
 }
 
 interface PersistedState {
@@ -55,6 +59,10 @@ interface PersistedState {
   questSource: 'gemini' | 'local' | 'mixed';
   activeQuest: ActiveQuest | null;
   seenQuestIds: string[];
+  /** ISO time of the newest chat message the player has opened. */
+  lastChatReadAt: string | null;
+  /** Collectible ids already shown on the collection screen. */
+  seenCollectibleIds: string[];
 }
 
 interface TransientState {
@@ -69,6 +77,8 @@ interface TransientState {
   party: Party | null;
   chat: ChatMessage[];
   nearbyPlayers: NearbyPlayer[];
+  /** Photo URI for the reward screen. Not persisted. */
+  pendingEvidenceUri: string | null;
 }
 
 export type AcceptResult = { ok: true } | { ok: false; reason: 'needs-party' | 'unknown-quest' | 'already-completed' };
@@ -95,6 +105,9 @@ interface Actions {
   checkIn(): { ok: boolean; distanceM: number | null };
   completeActiveQuest(verification: VerificationResult): CompleteResult;
   clearLastReward(): void;
+  setPendingEvidenceUri(uri: string | null): void;
+  markChatRead(): void;
+  markCollectiblesSeen(): void;
 
   connectParty(): void;
   createParty(): void;
@@ -150,7 +163,7 @@ function initialPersisted(): PersistedState {
   return {
     player: { ...DEMO_PLAYER_PROFILE },
     progress: seedProgress(),
-    settings: { units: deviceUnitSystem(), preferSolo: false, mobilityFriendly: false, demoMode: true, onboarded: false },
+    settings: { units: deviceUnitSystem(), preferSolo: false, mobilityFriendly: false, demoMode: true, onboarded: false, appearance: 'system' },
     locationMode: 'region',
     regionId: 'seattle',
     manualCenter: null,
@@ -160,6 +173,8 @@ function initialPersisted(): PersistedState {
     questSource: 'local',
     activeQuest: null,
     seenQuestIds: [],
+    lastChatReadAt: null,
+    seenCollectibleIds: ['pin:seed-home:neighborhood'],
   };
 }
 
@@ -175,6 +190,7 @@ const initialTransient: TransientState = {
   party: null,
   chat: [],
   nearbyPlayers: [],
+  pendingEvidenceUri: null,
 };
 
 // ---------- Derived helpers (exported for screens) ----------
@@ -220,6 +236,7 @@ export const useGameStore = create<GameState>()(
           if (requestId !== worldRequestId) return;
           if (res.ok && res.landmarks.length >= 2) {
             landmarks = res.landmarks;
+            if (res.cached) note = 'Showing saved places from your last visit.';
           } else {
             // Graceful fallback for sparse or unreachable map data.
             const nearSeed = DEMO_REGIONS.find((r) => r.id !== GENERIC_REGION_ID && distanceMeters(r.center, center) < 6_000);
@@ -395,7 +412,13 @@ export const useGameStore = create<GameState>()(
           return { ok: true, reward: outcome.reward };
         },
 
-        clearLastReward: () => set({ lastReward: null }),
+        clearLastReward: () => set({ lastReward: null, pendingEvidenceUri: null }),
+        setPendingEvidenceUri: (uri) => set({ pendingEvidenceUri: uri }),
+        markChatRead: () => {
+          const latest = [...get().chat].reverse().find((m) => !m.system)?.at ?? new Date().toISOString();
+          set({ lastChatReadAt: latest });
+        },
+        markCollectiblesSeen: () => set({ seenCollectibleIds: get().progress.collectibles.map((c) => c.id) }),
 
         connectParty: () => partyService.connect(),
         createParty: () => partyService.createParty(selfInfo(), get().activeQuest?.questId ?? null),
@@ -433,7 +456,21 @@ export const useGameStore = create<GameState>()(
         questSource: s.questSource,
         activeQuest: s.activeQuest,
         seenQuestIds: s.seenQuestIds,
+        lastChatReadAt: s.lastChatReadAt,
+        seenCollectibleIds: s.seenCollectibleIds,
       }),
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<PersistedState>;
+        const hadSeen = persisted != null && typeof persisted === 'object' && 'seenCollectibleIds' in persisted;
+        const ownedIds = p.progress?.collectibles.map((c) => c.id) ?? current.seenCollectibleIds;
+        return {
+          ...current,
+          ...p,
+          settings: { ...current.settings, ...(p.settings ?? {}), appearance: p.settings?.appearance ?? 'system' },
+          lastChatReadAt: p.lastChatReadAt ?? null,
+          seenCollectibleIds: hadSeen ? (p.seenCollectibleIds ?? []) : ownedIds,
+        };
+      },
       onRehydrateStorage: () => (state) => {
         state?.markHydrated();
       },

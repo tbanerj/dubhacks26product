@@ -1,19 +1,13 @@
-import React, { useState } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import React from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { haptic } from '../utils/haptics';
-import { colors, fonts, radii, spacing, TOUCH } from '../theme/tokens';
+import { TOUCH } from '../theme/tokens';
+import { useTheme } from '../theme/useTheme';
 import type { IconName } from '../theme/palette';
+import { GlassSurface } from './GlassSurface';
 
 type Variant = 'primary' | 'secondary' | 'sunset' | 'ghost' | 'danger';
-
-const VARIANTS: Record<Variant, { bg: string; fg: string; border: string; edge: string }> = {
-  primary: { bg: colors.forest, fg: colors.paper, border: colors.ink, edge: colors.forestDeep },
-  secondary: { bg: colors.paper, fg: colors.ink, border: colors.ink, edge: colors.ink },
-  sunset: { bg: colors.sunset, fg: colors.ink, border: colors.ink, edge: colors.sunsetDeep },
-  ghost: { bg: 'transparent', fg: colors.forest, border: 'transparent', edge: 'transparent' },
-  danger: { bg: colors.dangerSoft, fg: colors.berry, border: colors.berry, edge: colors.berry },
-};
 
 export interface ButtonProps {
   label: string;
@@ -27,14 +21,17 @@ export interface ButtonProps {
   accessibilityHint?: string;
 }
 
-/** Chunky "pressable sticker" button: sinks into its edge on press. */
+/** Primary and secondary actions. `sunset` matches primary so older call sites stay on the forest accent. */
 export function Button({ label, onPress, variant = 'primary', icon, disabled, loading, compact, style, accessibilityHint }: ButtonProps) {
-  const v = VARIANTS[variant];
-  const [press] = useState(() => new Animated.Value(0));
+  const { colors, radii, type } = useTheme();
+  const v = variant === 'sunset' ? 'primary' : variant;
+  const palette = {
+    primary: { bg: colors.primary, fg: colors.onPrimary, border: colors.primary },
+    secondary: { bg: colors.surface, fg: colors.primary, border: colors.border },
+    ghost: { bg: 'transparent', fg: colors.primary, border: 'transparent' },
+    danger: { bg: colors.dangerSoft, fg: colors.danger, border: 'transparent' },
+  }[v];
   const inactive = disabled || loading;
-  const edge = variant === 'ghost' ? 0 : 4;
-
-  const animate = (to: number) => Animated.spring(press, { toValue: to, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
 
   return (
     <Pressable
@@ -43,52 +40,82 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
-      onPressIn={() => animate(1)}
-      onPressOut={() => animate(0)}
       onPress={() => {
         haptic.tap();
         onPress();
       }}
-      style={[styles.wrap, { opacity: inactive && !loading ? 0.5 : 1, paddingBottom: edge }, style]}
-      hitSlop={compact ? 6 : 0}
+      style={({ pressed }) => [
+        styles.face,
+        compact && styles.compact,
+        {
+          backgroundColor: palette.bg,
+          borderColor: palette.border,
+          borderRadius: radii.pill,
+          opacity: inactive && !loading ? 0.45 : pressed ? 0.88 : 1,
+        },
+        style,
+      ]}
     >
-      {edge > 0 && <View style={[styles.edge, { backgroundColor: v.edge, top: edge }]} />}
-      <Animated.View
-        style={[
-          styles.face,
-          compact && styles.compact,
-          { backgroundColor: v.bg, borderColor: v.border, transform: [{ translateY: press.interpolate({ inputRange: [0, 1], outputRange: [0, edge] }) }] },
-        ]}
-      >
-        {loading ? (
-          <ActivityIndicator color={v.fg} />
-        ) : (
-          <>
-            {icon && <MaterialCommunityIcons name={icon} size={compact ? 18 : 20} color={v.fg} />}
-            <Text style={[styles.label, compact && styles.labelCompact, { color: v.fg }]} numberOfLines={1}>
-              {label}
-            </Text>
-          </>
-        )}
-      </Animated.View>
+      {loading ? (
+        <ActivityIndicator color={palette.fg} />
+      ) : (
+        <>
+          {icon && <MaterialCommunityIcons name={icon} size={compact ? 18 : 20} color={palette.fg} />}
+          <Text style={[type.bodyStrong, { color: palette.fg, fontSize: compact ? 15 : 16 }]} numberOfLines={1}>
+            {label}
+          </Text>
+        </>
+      )}
     </Pressable>
   );
 }
 
+export function IconButton({
+  icon,
+  label,
+  onPress,
+  glass,
+  color,
+  disabled,
+}: {
+  icon: IconName;
+  label: string;
+  onPress: () => void;
+  glass?: boolean;
+  color?: string;
+  disabled?: boolean;
+}) {
+  const { colors } = useTheme();
+  const glyph = color ?? colors.text;
+  const face = (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      disabled={disabled}
+      onPress={() => {
+        haptic.tap();
+        onPress();
+      }}
+      style={({ pressed }) => [styles.iconBtn, { opacity: disabled ? 0.4 : pressed ? 0.75 : 1 }]}
+    >
+      <MaterialCommunityIcons name={icon} size={22} color={glyph} />
+    </Pressable>
+  );
+  if (!glass) return face;
+  return <GlassSurface style={styles.glassBtn}>{face}</GlassSurface>;
+}
+
 const styles = StyleSheet.create({
-  wrap: { minHeight: TOUCH, position: 'relative' },
-  edge: { position: 'absolute', left: 0, right: 0, bottom: 0, borderRadius: radii.md },
   face: {
-    minHeight: TOUCH + 6,
-    borderRadius: radii.md,
-    borderWidth: 2,
-    paddingHorizontal: spacing.lg,
+    minHeight: TOUCH + 4,
+    paddingHorizontal: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.sm,
+    gap: 8,
+    borderWidth: StyleSheet.hairlineWidth,
   },
-  compact: { minHeight: TOUCH - 4, paddingHorizontal: spacing.md },
-  label: { fontFamily: fonts.display, fontSize: 17 },
-  labelCompact: { fontSize: 15 },
+  compact: { minHeight: TOUCH, paddingHorizontal: 14 },
+  iconBtn: { width: TOUCH, height: TOUCH, alignItems: 'center', justifyContent: 'center' },
+  glassBtn: { width: TOUCH, height: TOUCH, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
 });

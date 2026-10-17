@@ -3,8 +3,8 @@
  *
  * Expo inlines `EXPO_PUBLIC_*` values into the JS bundle at build time, so none of
  * these are secret once shipped. They are acceptable for a local demo build; for
- * production, Gemini and Perceptron calls should go through a backend proxy that
- * holds the real keys (see README "Production notes").
+ * production, Gemini calls should go through a backend proxy that holds the real
+ * key (see README "Production notes").
  */
 
 const PLACEHOLDER_PATTERN = /^YOUR_.*_HERE$/;
@@ -25,13 +25,8 @@ function readUrl(value: string | undefined, fallback: string): string {
 export const config = {
   gemini: {
     apiKey: readKey(process.env.EXPO_PUBLIC_GEMINI_API_KEY),
-    model: process.env.EXPO_PUBLIC_GEMINI_MODEL?.trim() || 'gemini-2.5-flash',
+    model: process.env.EXPO_PUBLIC_GEMINI_MODEL?.trim() || 'gemini-3.5-flash-lite',
     endpoint: 'https://generativelanguage.googleapis.com/v1beta/models',
-  },
-  perceptron: {
-    apiKey: readKey(process.env.EXPO_PUBLIC_PERCEPTRON_API_KEY),
-    baseUrl: readUrl(process.env.EXPO_PUBLIC_PERCEPTRON_BASE_URL, 'https://api.perceptron.inc/v1'),
-    model: process.env.EXPO_PUBLIC_PERCEPTRON_MODEL?.trim() || 'perceptron-mk1.5',
   },
   photon: {
     relayUrl: readKey(process.env.EXPO_PUBLIC_PHOTON_RELAY_URL),
@@ -43,10 +38,9 @@ export const config = {
 
 export type IntegrationStatus = 'live' | 'demo';
 
-export function integrationStatus(): Record<'gemini' | 'perceptron' | 'photon', IntegrationStatus> {
+export function integrationStatus(): Record<'gemini' | 'photon', IntegrationStatus> {
   return {
     gemini: config.gemini.apiKey ? 'live' : 'demo',
-    perceptron: config.perceptron.apiKey ? 'live' : 'demo',
     photon: config.photon.relayUrl ? 'live' : 'demo',
   };
 }

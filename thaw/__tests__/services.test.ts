@@ -1,5 +1,4 @@
-import { generateQuests } from '../src/services/gemini';
-import { verifyEvidence } from '../src/services/perceptron';
+import { generateQuests, verifyEvidence } from '../src/services/gemini';
 import { SimulatedPartyService } from '../src/services/photon';
 import { buildLeaderboard } from '../src/game/leaderboard';
 import { seededLandmarks } from '../src/data/regions';
@@ -41,7 +40,6 @@ describe('gemini service (key configured)', () => {
     jest.doMock('../src/config/env', () => ({
       config: {
         gemini: { apiKey: 'test-key', model: 'gemini-test', endpoint: 'https://example.invalid/models' },
-        perceptron: { apiKey: null, baseUrl: '', model: '' },
         photon: { relayUrl: null },
         places: { overpassUrl: '' },
       },
@@ -90,9 +88,80 @@ describe('gemini service (key configured)', () => {
     global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as never;
     expect((await g.generateQuests(req)).quests.length).toBeGreaterThan(0);
   });
+
+  it('reads quest JSON when a thought signature sits beside the text', async () => {
+    const g = load();
+    const aiQuest = {
+      landmarkId: 'sea-drumheller',
+      title: 'Ripple Reader',
+      description: 'Watch how wind writes on the fountain water and capture a ripple.',
+      instructions: ['Stand by the fountain edge path.', 'Photograph a ripple pattern.'],
+      mode: 'solo',
+      durationMin: 10,
+      difficulty: 'easy',
+      xp: 60,
+      collectible: { theme: 'hidden', rarity: 'common', name: 'Ripple Glint' },
+      evidence: 'A photo of a ripple on the water.',
+    };
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        candidates: [{ finishReason: 'STOP', content: { parts: [{ thoughtSignature: 'sig', text: JSON.stringify({ quests: [aiQuest] }) }] } }],
+      }),
+    }) as never;
+    const batch = await g.generateQuests(req);
+    expect(batch.quests.some((q: Quest) => q.source === 'gemini' && q.title === 'Ripple Reader')).toBe(true);
+  });
+
+  it('falls back when Gemini stops before finishing', async () => {
+    const g = load();
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: async () => ({ candidates: [{ finishReason: 'MAX_TOKENS', content: { parts: [{ thoughtSignature: 'sig' }] } }] }),
+    }) as never;
+    const batch = await g.generateQuests(req);
+    expect(batch.source).toBe('local');
+    expect(batch.note).toMatch(/MAX_TOKENS/);
+  });
+
+  const photo = { quest: { title: 'Q', evidence: 'A photo of the fountain' } as Quest, landmarkName: 'X', image: { uri: 'file://a.jpg', base64: 'aaa', mimeType: 'image/jpeg' } };
+  const verdict = (body: unknown) => ({
+    ok: true,
+    status: 200,
+    json: async () => ({
+      candidates: [{ finishReason: 'STOP', content: { parts: [{ thoughtSignature: 'sig', text: JSON.stringify(body) }] } }],
+    }),
+  });
+
+  it('accepts a Gemini photo verdict', async () => {
+    const g = load();
+    global.fetch = jest.fn().mockResolvedValue(verdict({ match: true, confidence: 0.8, observations: 'a fountain', feedback: 'Nice angle.' })) as never;
+    const res = await g.verifyEvidence(photo);
+    expect(res.ok && res.result.accepted && res.result.source === 'gemini').toBe(true);
+    const init = (global.fetch as unknown as jest.Mock).mock.calls[0][1] as { body: string };
+    const sent = JSON.parse(init.body) as { contents: { parts: { inlineData?: { mimeType: string } }[] }[] };
+    expect(sent.contents[0]?.parts[0]?.inlineData?.mimeType).toBe('image/jpeg');
+  });
+
+  it('rejects a low-confidence Gemini photo verdict', async () => {
+    const g = load();
+    global.fetch = jest.fn().mockResolvedValue(verdict({ match: true, confidence: 0.2, observations: 'a ceiling', feedback: 'Try the landmark.' })) as never;
+    const res = await g.verifyEvidence(photo);
+    expect(res.ok && !res.result.accepted && res.result.source === 'gemini').toBe(true);
+  });
+
+  it('uses a labeled simulated accept when Gemini cannot check the photo', async () => {
+    const g = load();
+    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({ error: { message: 'unavailable' } }) }) as never;
+    const res = await g.verifyEvidence(photo);
+    expect(res.ok && res.result.accepted && res.result.source === 'demo').toBe(true);
+    if (res.ok) expect(res.result.feedback).toMatch(/could not check/);
+  });
 });
 
-describe('perceptron demo verifier', () => {
+describe('gemini demo verifier', () => {
   const quest = { title: 'Q', evidence: 'A photo' } as Quest;
   it('is transparent about being simulated and supports a rejection path', async () => {
     jest.useFakeTimers();

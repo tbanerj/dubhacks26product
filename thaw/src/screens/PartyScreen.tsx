@@ -1,15 +1,16 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 import type { TabScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
+import { useWorld } from '../hooks/useWorld';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, Chip, EmptyState, Notice, SectionTitle } from '../components/Paper';
-import { Button } from '../components/Button';
+import { Card, Chip, EmptyState, Notice } from '../components/Paper';
+import { Button, IconButton } from '../components/Button';
 import { Critter } from '../components/Critter';
-import { colors, fonts, radii, spacing, type } from '../theme/tokens';
-import { formatTime } from '../utils/format';
+import { useTheme } from '../theme/useTheme';
+import { unreadChatCount } from '../game/attention';
 import { sendInviteViaRelay } from '../services/photon';
 import { config } from '../config/env';
 import { t } from '../i18n/strings';
@@ -22,6 +23,8 @@ const PROXIMITY_LABEL: Record<NearbyPlayer['proximity'], string> = {
 };
 
 export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
+  const { colors, type } = useTheme();
+  const world = useWorld();
   const s = useGameStore(
     useShallow((st) => ({
       connection: st.connection,
@@ -30,6 +33,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       nearby: st.nearbyPlayers,
       quests: st.quests,
       activeQuest: st.activeQuest,
+      selfId: st.player.id,
+      lastChatReadAt: st.lastChatReadAt,
     })),
   );
   const a = useGameStore(
@@ -40,12 +45,10 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       invitePlayer: st.invitePlayer,
       leaveParty: st.leaveParty,
       setReady: st.setReady,
-      sendChat: st.sendChat,
     })),
   );
-  const [draft, setDraft] = useState('');
   const [shareNote, setShareNote] = useState<string | null>(null);
-  const chatScroll = useRef<React.ComponentRef<typeof ScrollView>>(null);
+  const [picking, setPicking] = useState(false);
 
   useEffect(() => {
     a.connectParty();
@@ -53,8 +56,12 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
 
   const party = s.party;
   const me = party?.members.find((m) => m.isSelf);
-  const partyQuest = party?.questId ? s.quests.find((q) => q.id === party.questId) : undefined;
+  const rawQuest = party?.questId ? s.quests.find((q) => q.id === party.questId) : undefined;
+  const partyQuest = rawQuest && rawQuest.mode !== 'solo' ? rawQuest : undefined;
   const spots = party ? party.capacity - party.members.length : 0;
+  const unread = unreadChatCount(s.chat, s.lastChatReadAt, s.selfId);
+  const lastMessage = [...s.chat].reverse().find((m) => !m.system);
+  const groupQuests = world.entries.filter((e) => e.quest.mode !== 'solo' && e.status !== 'completed');
 
   const share = async () => {
     const message = `Join my Thaw party${partyQuest ? ` for “${partyQuest.title}”` : ''}! Let's explore together – meet in a public spot.`;
@@ -69,204 +76,196 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     }
   };
 
-  const send = () => {
-    if (!draft.trim()) return;
-    a.sendChat(draft);
-    setDraft('');
-    setTimeout(() => chatScroll.current?.scrollToEnd({ animated: true }), 50);
+  const confirmLeave = () => {
+    const go = () => a.leaveParty();
+    if (Platform.OS === 'web') return go();
+    Alert.alert('Leave party?', 'You’ll leave this group. You can start another any time.', [
+      { text: t('common.cancel'), style: 'cancel' },
+      { text: t('party.leave'), style: 'destructive', onPress: go },
+    ]);
   };
 
-  const status = (
-    <Chip
-      label={s.connection === 'simulated' ? 'Simulated lobby' : s.connection === 'connecting' ? 'Connecting…' : s.connection}
-      icon={s.connection === 'connecting' ? 'timer-sand' : 'flask-outline'}
-      bg={colors.butterSoft}
-    />
-  );
+  const statusLabel = s.connection === 'simulated' ? 'Simulated lobby' : s.connection === 'connecting' ? 'Connecting…' : s.connection;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-      <ScreenShell title={t('party.title')} subtitle="Explore together, 2–4 players" tab right={status} keyboardShouldPersistTaps="handled">
-        <Notice icon="shield-check-outline" text={t('party.safety')} />
-
-        {!party ? (
-          <>
-            <Card tint={colors.white} style={{ alignItems: 'center', gap: spacing.sm }}>
-              <View style={{ flexDirection: 'row' }}>
-                <Critter hue={150} size={56} />
-                <Critter hue={28} size={64} mood="wow" />
-                <Critter hue={330} size={56} />
-              </View>
-              <Text style={[type.heading, { textAlign: 'center' }]}>Some quests are better together</Text>
-              <Text style={[type.small, { textAlign: 'center' }]}>Party quests earn bonus XP and co-op pins. Everything social has a solo option too.</Text>
-              <Button label={t('party.create')} icon="account-plus" variant="sunset" onPress={a.createParty} style={{ alignSelf: 'stretch' }} />
-            </Card>
-
-            <SectionTitle>{t('party.nearby')}</SectionTitle>
-            {s.connection !== 'simulated' ? (
-              <Text style={type.small}>Looking for explorers…</Text>
-            ) : s.nearby.length === 0 ? (
-              <EmptyState icon="account-search-outline" title="Nobody around right now." />
-            ) : (
-              s.nearby.map((p) => (
-                <Card key={p.id} tint={colors.paper} style={styles.playerRow}>
-                  <Critter hue={p.avatarHue} size={44} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={type.subheading}>
-                      {p.name} <Text style={type.small}>· Lv {p.level}</Text>
-                    </Text>
-                    <Text style={type.small}>
-                      {PROXIMITY_LABEL[p.proximity]} · {p.lookingFor}
-                    </Text>
-                    {p.isDemo && <Chip label={t('party.demoLabel')} icon="flask-outline" bg={colors.butterSoft} style={{ marginTop: 4 }} />}
-                  </View>
-                  <Button label="Join" compact variant="secondary" onPress={() => a.joinHostedParty(p.id)} />
-                </Card>
-              ))
-            )}
-            <Text style={[type.small, { textAlign: 'center' }]}>
-              Positions are shown only as rough distance – never exact locations. Real-time multiplayer needs a backend; this lobby is a local simulation.
-            </Text>
-          </>
+    <ScreenShell
+      title={party?.name ?? t('party.title')}
+      subtitle={party ? `${party.members.length} of ${party.capacity}` : 'Explore together'}
+      tab
+      right={
+        party ? (
+            <IconButton icon="dots-horizontal" label="Leave party" onPress={confirmLeave} />
         ) : (
-          <>
-            <Card tint={colors.sunsetSoft} style={{ gap: spacing.sm }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={type.heading}>{party.name}</Text>
-                <Chip label={spots === 1 ? t('party.spot1') : spots > 0 ? t('party.spots', { n: spots }) : t('party.full')} bg={spots > 0 ? colors.white : colors.grass} />
-              </View>
-              <View style={styles.members}>
-                {party.members.map((m) => (
-                  <View key={m.id} style={styles.member} accessible accessibilityLabel={`${m.name}${m.isSelf ? ' (you)' : ''}${m.isDemo ? ', demo participant' : ''}, ${m.ready ? 'ready' : 'not ready'}`}>
-                    <View style={[styles.memberAvatar, m.ready && { backgroundColor: colors.grassSoft, borderColor: colors.forest }]}>
-                      <Critter hue={m.avatarHue} size={48} mood={m.ready ? 'happy' : 'sleepy'} />
-                    </View>
-                    <Text style={styles.memberName} numberOfLines={1}>
-                      {m.isSelf ? 'You' : m.name}
-                    </Text>
-                    <Text style={[styles.memberState, { color: m.ready ? colors.forest : colors.inkFaint }]}>{m.ready ? 'Ready' : 'Not ready'}</Text>
-                    {m.isDemo && <Text style={styles.demoTag}>demo</Text>}
+          <Chip label={statusLabel} icon="flask-outline" />
+        )
+      }
+    >
+      {party && s.connection === 'simulated' ? <Chip label="Simulated lobby" icon="flask-outline" /> : null}
+
+      {!party ? (
+        <>
+          <Card style={{ alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row' }}>
+              <Critter hue={150} size={48} />
+              <Critter hue={28} size={56} mood="happy" />
+              <Critter hue={330} size={48} />
+            </View>
+            <Text style={[type.heading, { textAlign: 'center' }]}>Some quests are better together</Text>
+            <Text style={[type.small, { textAlign: 'center' }]}>Party quests stay optional. Every social quest still has a solo version.</Text>
+            <Button label={t('party.create')} onPress={a.createParty} style={{ alignSelf: 'stretch' }} />
+          </Card>
+          <Text style={type.heading}>{t('party.nearby')}</Text>
+          {s.nearby.length === 0 ? (
+            <EmptyState icon="account-search-outline" title="Nobody around right now." />
+          ) : (
+            s.nearby.map((p) => (
+              <Card key={p.id} style={styles.playerRow}>
+                <Critter hue={p.avatarHue} size={40} />
+                <View style={{ flex: 1 }}>
+                  <Text style={type.bodyStrong}>
+                    {p.name} · Lv {p.level}
+                  </Text>
+                  <Text style={type.small}>
+                    {PROXIMITY_LABEL[p.proximity]} · {p.lookingFor}
+                  </Text>
+                  {p.isDemo ? <Text style={type.tiny}>{t('party.demoLabel')}</Text> : null}
+                </View>
+                <Button label="Join" compact variant="secondary" onPress={() => a.joinHostedParty(p.id)} />
+              </Card>
+            ))
+          )}
+          <Text style={[type.small, { textAlign: 'center' }]}>Distances are rough on purpose. This lobby is a local simulation, not live multiplayer.</Text>
+        </>
+      ) : picking ? (
+        <>
+          <Text style={type.heading}>Party quests</Text>
+          {groupQuests.length === 0 ? (
+            <EmptyState icon="flag-outline" title="No group quests nearby." body="Solo quests stay on the map. Try another area, or turn off Prefer solo in Settings." />
+          ) : (
+            groupQuests.map((e) => (
+              <Pressable
+                key={e.quest.id}
+                onPress={() => navigation.navigate('QuestDetail', { questId: e.quest.id })}
+                accessibilityRole="button"
+                accessibilityLabel={`${e.quest.title}, party quest`}
+                style={[styles.questPick, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={type.bodyStrong}>{e.quest.title}</Text>
+                  <Text style={type.small}>
+                    {e.landmark.name} · {e.quest.xp} XP
+                  </Text>
+                </View>
+                <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textFaint} />
+              </Pressable>
+            ))
+          )}
+          <Button label="Back" variant="ghost" onPress={() => setPicking(false)} />
+        </>
+      ) : (
+        <>
+          <Card style={{ gap: 12 }}>
+            <View style={styles.members}>
+              {party.members.map((m) => (
+                <View key={m.id} style={styles.member} accessible accessibilityLabel={`${m.isSelf ? 'You' : m.name}${m.isDemo ? ', demo' : ''}, ${m.ready ? 'ready' : 'not ready'}`}>
+                  <View style={[styles.memberAvatar, { backgroundColor: m.ready ? colors.sageSoft : colors.surfaceMuted }]}>
+                    <Critter hue={m.avatarHue} size={40} mood={m.ready ? 'happy' : 'sleepy'} />
                   </View>
-                ))}
-                {Array.from({ length: spots }, (_, i) => (
-                  <View key={`empty-${i}`} style={styles.member}>
-                    <View style={[styles.memberAvatar, styles.emptySeat]}>
-                      <MaterialCommunityIcons name="plus" size={22} color={colors.inkFaint} />
-                    </View>
-                    <Text style={[styles.memberName, { color: colors.inkFaint }]}>Open</Text>
+                  <Text style={type.tiny} numberOfLines={1}>
+                    {m.isSelf ? 'You' : m.name}
+                  </Text>
+                  <Text style={[type.tiny, { color: m.ready ? colors.primary : colors.textFaint }]}>{m.ready ? 'Ready' : 'Not ready'}</Text>
+                  {m.isDemo ? <Text style={type.tiny}>Demo</Text> : null}
+                </View>
+              ))}
+              {Array.from({ length: spots }, (_, i) => (
+                <View key={`empty-${i}`} style={styles.member}>
+                  <View style={[styles.memberAvatar, { borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed' }]}>
+                    <MaterialCommunityIcons name="plus" size={18} color={colors.textFaint} />
                   </View>
-                ))}
-              </View>
-              <View style={styles.questRow}>
-                <MaterialCommunityIcons name="flag-variant" size={18} color={colors.ink} />
-                <Text style={[type.small, { flex: 1, color: colors.ink }]}>{partyQuest ? `Attempting: ${partyQuest.title}` : 'No quest chosen yet – pick a party quest on the map.'}</Text>
-              </View>
-              <View style={{ flexDirection: 'row', gap: spacing.sm }}>
+                  <Text style={[type.tiny, { color: colors.textFaint }]}>Open</Text>
+                </View>
+              ))}
+            </View>
+            <Button label={me?.ready ? t('party.notReady') : t('party.ready')} variant={me?.ready ? 'secondary' : 'primary'} onPress={() => a.setReady(!me?.ready)} />
+          </Card>
+
+          <Card style={{ gap: 8 }}>
+            <Text style={type.tiny}>Group quest</Text>
+            {partyQuest ? (
+              <>
+                <Text style={type.heading}>{partyQuest.title}</Text>
+                <Text style={type.small}>{partyQuest.mode === 'party' ? 'Party quest' : 'Group quest'} · {partyQuest.xp} XP</Text>
                 <Button
-                  label={me?.ready ? t('party.notReady') : t('party.ready')}
-                  icon={me?.ready ? 'close-circle-outline' : 'check-circle-outline'}
-                  variant={me?.ready ? 'secondary' : 'primary'}
-                  compact
-                  onPress={() => a.setReady(!me?.ready)}
-                  style={{ flex: 1 }}
+                  label="Open quest"
+                  variant="secondary"
+                  onPress={() => (s.activeQuest?.questId === partyQuest.id ? navigation.navigate('ActiveQuest') : navigation.navigate('QuestDetail', { questId: partyQuest.id }))}
                 />
-                <Button label={partyQuest ? 'Open quest' : 'Find a quest'} icon="compass-outline" variant="secondary" compact style={{ flex: 1 }} onPress={() => (partyQuest && s.activeQuest?.questId === partyQuest.id ? navigation.navigate('ActiveQuest') : navigation.navigate('Explore'))} />
-              </View>
-            </Card>
-
-            {spots > 0 && s.nearby.some((p) => !party.members.some((m) => m.id === p.id)) && (
-              <View style={{ gap: spacing.sm }}>
-                <SectionTitle>Invite explorers</SectionTitle>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.sm }}>
-                  {s.nearby
-                    .filter((p) => !party.members.some((m) => m.id === p.id))
-                    .map((p) => (
-                      <Pressable key={p.id} style={styles.invite} onPress={() => a.invitePlayer(p.id)} accessibilityRole="button" accessibilityLabel={`Invite ${p.name}, demo participant`}>
-                        <Critter hue={p.avatarHue} size={40} />
-                        <Text style={styles.memberName}>{p.name}</Text>
-                        <Text style={styles.demoTag}>demo · invite</Text>
-                      </Pressable>
-                    ))}
-                </ScrollView>
-              </View>
+              </>
+            ) : (
+              <>
+                <Text style={type.body}>No group quest selected.</Text>
+                <Button label="Find a quest" onPress={() => setPicking(true)} />
+              </>
             )}
+          </Card>
 
-            <Button label={t('party.share')} icon="share-variant" variant="secondary" compact onPress={() => void share()} />
-            {shareNote && <Notice text={shareNote} />}
-
-            <Card tint={colors.white} style={{ gap: spacing.sm }}>
-              <Text style={type.heading}>Party chat</Text>
-              <ScrollView ref={chatScroll} style={{ maxHeight: 260 }} contentContainerStyle={{ gap: 6 }} onContentSizeChange={() => chatScroll.current?.scrollToEnd({ animated: false })} nestedScrollEnabled>
-                {s.chat.map((m) =>
-                  m.system ? (
-                    <Text key={m.id} style={styles.system}>
-                      {m.text}
-                    </Text>
-                  ) : (
-                    <View key={m.id} style={[styles.bubble, m.authorId === me?.id ? styles.mine : styles.theirs]}>
-                      {m.authorId !== me?.id && <Text style={styles.author}>{m.authorName}</Text>}
-                      <Text style={type.body}>{m.text}</Text>
-                      <Text style={styles.time}>{formatTime(m.at)}</Text>
+          {spots > 0 ? (
+            <>
+              <Text style={type.heading}>Invite demo explorers</Text>
+              {s.nearby
+                .filter((p) => !party.members.some((m) => m.id === p.id))
+                .map((p) => (
+                  <Card key={p.id} style={styles.playerRow}>
+                    <Critter hue={p.avatarHue} size={40} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={type.bodyStrong}>
+                        {p.name} · Lv {p.level}
+                      </Text>
+                      <Text style={type.small}>
+                        {PROXIMITY_LABEL[p.proximity]} · {p.lookingFor}
+                      </Text>
+                      {p.isDemo ? <Text style={type.tiny}>{t('party.demoLabel')}</Text> : null}
                     </View>
-                  ),
-                )}
-              </ScrollView>
-              <View style={styles.inputRow}>
-                <TextInput
-                  value={draft}
-                  onChangeText={setDraft}
-                  placeholder={t('party.chatPlaceholder')}
-                  placeholderTextColor={colors.inkFaint}
-                  style={styles.input}
-                  maxLength={280}
-                  returnKeyType="send"
-                  onSubmitEditing={send}
-                  accessibilityLabel="Chat message"
-                />
-                <Pressable onPress={send} style={styles.send} accessibilityRole="button" accessibilityLabel={t('party.send')} disabled={!draft.trim()}>
-                  <MaterialCommunityIcons name="send" size={20} color={colors.paper} />
-                </Pressable>
-              </View>
-              <Text style={type.small}>Keep chat friendly. Don’t share phone numbers, addresses or socials.</Text>
-            </Card>
+                    <Button label="Invite" compact variant="secondary" onPress={() => a.invitePlayer(p.id)} />
+                  </Card>
+                ))}
+            </>
+          ) : null}
 
-            <Button label={t('party.leave')} icon="exit-run" variant="danger" compact onPress={a.leaveParty} />
-          </>
-        )}
-      </ScreenShell>
-    </KeyboardAvoidingView>
+          <Button label="Invite friends" variant="secondary" onPress={() => void share()} />
+          {shareNote ? <Notice text={shareNote} /> : null}
+
+          <Pressable onPress={() => navigation.navigate('PartyChat')} accessibilityRole="button" accessibilityLabel={unread ? `Party chat, ${unread} unread` : 'Party chat'} style={[styles.chatPreview, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <MaterialCommunityIcons name="chat-outline" size={20} color={colors.primary} />
+            <View style={{ flex: 1 }}>
+              <Text style={type.bodyStrong}>Party chat</Text>
+              <Text style={type.small} numberOfLines={1}>
+                {lastMessage ? `${lastMessage.authorName}: ${lastMessage.text}` : 'Say hello'}
+              </Text>
+            </View>
+            {unread > 0 ? (
+              <View style={[styles.unread, { backgroundColor: colors.primary }]}>
+                <Text style={[type.tiny, { color: colors.onPrimary }]}>{unread}</Text>
+              </View>
+            ) : (
+              <MaterialCommunityIcons name="chevron-right" size={20} color={colors.textFaint} />
+            )}
+          </Pressable>
+        </>
+      )}
+
+      <Notice icon="shield-check-outline" text={t('party.safety')} />
+    </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  playerRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, padding: spacing.md },
-  members: { flexDirection: 'row', justifyContent: 'space-between' },
+  playerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  members: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   member: { alignItems: 'center', width: 72, gap: 2 },
-  memberAvatar: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center' },
-  emptySeat: { borderStyle: 'dashed', borderColor: colors.inkFaint, backgroundColor: 'transparent' },
-  memberName: { fontFamily: fonts.bodyBold, fontSize: 12, color: colors.ink },
-  memberState: { fontFamily: fonts.bodySemi, fontSize: 11 },
-  demoTag: { fontFamily: fonts.bodySemi, fontSize: 10, color: colors.inkSoft },
-  questRow: { flexDirection: 'row', gap: spacing.xs, alignItems: 'center', backgroundColor: colors.white, padding: spacing.sm, borderRadius: radii.sm },
-  invite: { alignItems: 'center', padding: spacing.sm, borderRadius: radii.md, borderWidth: 2, borderColor: colors.ink, backgroundColor: colors.paper, width: 96, minHeight: 44 },
-  system: { fontFamily: fonts.bodySemi, fontSize: 12, color: colors.inkSoft, textAlign: 'center' },
-  bubble: { maxWidth: '82%', borderRadius: radii.md, padding: spacing.sm, borderWidth: 1.5, borderColor: colors.ink },
-  mine: { alignSelf: 'flex-end', backgroundColor: colors.grassSoft },
-  theirs: { alignSelf: 'flex-start', backgroundColor: colors.paper },
-  author: { fontFamily: fonts.bodyBold, fontSize: 11, color: colors.sunsetDeep },
-  time: { fontFamily: fonts.body, fontSize: 10, color: colors.inkFaint, alignSelf: 'flex-end' },
-  inputRow: { flexDirection: 'row', gap: spacing.sm, alignItems: 'center' },
-  input: {
-    flex: 1,
-    minHeight: 44,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    fontFamily: fonts.body,
-    fontSize: 15,
-    color: colors.ink,
-    backgroundColor: colors.paper,
-  },
-  send: { width: 44, height: 44, borderRadius: 22, backgroundColor: colors.forest, borderWidth: 2, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center' },
+  memberAvatar: { width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' },
+  questPick: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, padding: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
+  chatPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, padding: 14, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
+  unread: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
 });

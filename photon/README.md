@@ -106,7 +106,7 @@ The SQLite file and `data/media` must live on a disk that survives restarts. A c
 
 ## Not wired
 
-- Perceptron, or any live image model. `THAW_VERIFIER=live` exits with an error instead of pretending a photo passed.
+- A live image model in this service. `THAW_VERIFIER=live` exits with an error instead of pretending a photo passed. The Expo app checks photos with Gemini.
 - Gemini quest generation. Three local templates are used for every place.
 - Outgoing collectible images.
 - An Expo screen. Linking is the HTTP stand-in above.

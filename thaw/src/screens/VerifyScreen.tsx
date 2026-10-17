@@ -1,33 +1,36 @@
 import React, { useRef, useState } from 'react';
-import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
-import { haptic } from '../utils/haptics';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { haptic } from '../utils/haptics';
 import type { RootScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
 import { useWorld } from '../hooks/useWorld';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, EmptyState, Notice } from '../components/Paper';
-import { Button } from '../components/Button';
-import { Critter } from '../components/Critter';
-import { colors, fonts, radii, spacing, type } from '../theme/tokens';
-import { isPerceptronConfigured, verifyEvidence, type EvidenceImage } from '../services/perceptron';
+import { EmptyState, Notice } from '../components/Paper';
+import { Button, IconButton } from '../components/Button';
+import { useTheme } from '../theme/useTheme';
+import { isLiveVerificationConfigured, verifyEvidence, type EvidenceImage } from '../services/gemini';
 import type { VerificationResult } from '../types';
 import { t } from '../i18n/strings';
 
 type Phase = { kind: 'capture' } | { kind: 'checking' } | { kind: 'rejected'; result: VerificationResult } | { kind: 'error'; message: string };
 
 export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
+  const insets = useSafeAreaInsets();
+  const { colors, type } = useTheme();
   const world = useWorld();
   const active = useGameStore((s) => s.activeQuest);
   const demoMode = useGameStore((s) => s.settings.demoMode);
   const completeActiveQuest = useGameStore((s) => s.completeActiveQuest);
+  const setPendingEvidenceUri = useGameStore((s) => s.setPendingEvidenceUri);
   const [image, setImage] = useState<EvidenceImage | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'capture' });
   const [pickError, setPickError] = useState<string | null>(null);
   const [demoOutcome, setDemoOutcome] = useState<'accept' | 'reject'>('accept');
   const submitting = useRef(false);
-  const live = isPerceptronConfigured();
+  const live = isLiveVerificationConfigured();
 
   const entry = world.active;
   if (!active || !entry) {
@@ -50,7 +53,7 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
     try {
       const perm = source === 'camera' ? await ImagePicker.requestCameraPermissionsAsync() : await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!perm.granted) {
-        setPickError(source === 'camera' ? 'Camera permission is off. You can choose a photo from your library instead, or enable it in Settings.' : 'Photo access is off. Enable it in Settings, or use the camera.');
+        setPickError(source === 'camera' ? 'Camera permission is off. You can choose a photo from your library, or enable the camera in Settings.' : 'Photo access is off. Enable it in Settings, or use the camera.');
         return;
       }
       const opts: ImagePicker.ImagePickerOptions = { mediaTypes: ['images'], quality: 0.6, base64: live, allowsEditing: false, exif: false };
@@ -59,14 +62,14 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
       const asset = res.assets[0];
       if (!asset) return;
       setImage({ uri: asset.uri, base64: asset.base64 ?? null, mimeType: asset.mimeType ?? 'image/jpeg' });
-      setPhase({ kind: 'capture' });
+      if (phase.kind === 'rejected' || phase.kind === 'error') setPhase({ kind: 'capture' });
     } catch (e) {
-      setPickError(source === 'camera' ? 'The camera isn’t available here (simulators have none). Try choosing a photo instead.' : `Couldn’t open photos: ${e instanceof Error ? e.message : 'unknown error'}`);
+      setPickError(source === 'camera' ? 'The camera isn’t available here. Try a photo from your library.' : `Couldn’t open photos: ${e instanceof Error ? e.message : 'unknown error'}`);
     }
   };
 
   const submit = async () => {
-    if (!image || submitting.current) return; // guard double-taps
+    if (!image || submitting.current || phase.kind === 'checking') return;
     submitting.current = true;
     setPhase({ kind: 'checking' });
     try {
@@ -83,132 +86,98 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
       const done = completeActiveQuest(res.result);
       if (done.ok) {
         haptic.success();
-        setImage(null); // drop the photo reference; Thaw doesn't keep evidence photos
+        setPendingEvidenceUri(image.uri);
         navigation.replace('Reward');
       } else {
-        setPhase({ kind: 'error', message: done.reason === 'duplicate' ? 'This quest was already completed – rewards are only granted once.' : 'This quest is no longer active.' });
+        setPhase({ kind: 'error', message: done.reason === 'duplicate' ? 'This quest was already completed. Rewards are only granted once.' : 'This quest is no longer active.' });
       }
     } finally {
       submitting.current = false;
     }
   };
 
+  const instruction = entry.quest.evidence;
+
   return (
-    <ScreenShell title={t('verify.title')} subtitle={entry.quest.title} back>
-      <Notice tone={live ? 'info' : 'demo'} icon={live ? 'shield-check-outline' : 'flask-outline'} text={live ? t('verify.liveNote') : t('verify.demoNote')} />
-
-      <Card tint={colors.white} style={{ gap: spacing.sm }}>
-        <Text style={type.tiny}>WHAT TO CAPTURE</Text>
-        <Text style={type.body}>{entry.quest.evidence}</Text>
-        <Text style={type.small}>No faces needed. Only photograph people who have said yes.</Text>
-      </Card>
-
-      {phase.kind === 'checking' ? (
-        <Card tint={colors.butterSoft} style={styles.checking}>
-          <Critter hue={useGameStore.getState().player.avatarHue} size={80} mood="wow" />
-          <Text style={type.heading} accessibilityLiveRegion="polite">
-            {t('verify.checking')}
-          </Text>
-          <Text style={type.small}>{live ? 'Asking Perceptron to look at your photo.' : 'Running the simulated demo check.'}</Text>
-        </Card>
-      ) : image ? (
-        <View style={{ gap: spacing.sm }}>
-          <View style={styles.polaroid}>
-            <Image source={{ uri: image.uri }} style={styles.photo} accessibilityLabel="Your evidence photo" resizeMode="cover" />
-            <Text style={styles.caption} numberOfLines={1}>
-              {entry.landmark.name}
-            </Text>
-          </View>
-          <View style={styles.row}>
-            <Button label={t('verify.retake')} icon="camera-retake-outline" variant="secondary" compact onPress={() => void pick('camera')} style={{ flex: 1 }} />
-            <Button label="Pick another" icon="image-multiple" variant="secondary" compact onPress={() => void pick('library')} style={{ flex: 1 }} />
-          </View>
-        </View>
+    <View style={[styles.root, { backgroundColor: '#121815' }]}>
+      {image ? (
+        <Image source={{ uri: image.uri }} style={StyleSheet.absoluteFill} accessibilityLabel="Your evidence photo" resizeMode="cover" />
       ) : (
-        <View style={styles.row}>
-          <Pressable style={styles.bigPick} onPress={() => void pick('camera')} accessibilityRole="button" accessibilityLabel={t('verify.camera')}>
-            <MaterialCommunityIcons name="camera" size={36} color={colors.ink} />
-            <Text style={type.subheading}>{t('verify.camera')}</Text>
-          </Pressable>
-          <Pressable style={[styles.bigPick, { backgroundColor: colors.skySoft }]} onPress={() => void pick('library')} accessibilityRole="button" accessibilityLabel={t('verify.library')}>
-            <MaterialCommunityIcons name="image-multiple" size={36} color={colors.ink} />
-            <Text style={type.subheading}>{t('verify.library')}</Text>
-          </Pressable>
+        <View style={styles.placeholder}>
+          <MaterialCommunityIcons name="camera-outline" size={36} color="#F4F3EC" />
         </View>
       )}
+      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
+        <IconButton icon="close" label="Close" glass color="#1C2420" onPress={() => navigation.goBack()} />
+        <View style={styles.instruction}>
+          <Text style={[type.small, { color: '#1C2420', textAlign: 'center' }]} numberOfLines={2}>
+            {instruction}
+          </Text>
+        </View>
+        <View style={{ width: 44 }} />
+      </View>
 
-      {pickError && <Notice tone="warn" icon="alert-circle-outline" text={pickError} />}
+      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        {phase.kind === 'checking' && (
+          <View style={styles.banner} accessibilityLiveRegion="polite">
+            <ActivityIndicator color={colors.primary} />
+            <Text style={[type.bodyStrong, { color: '#1C2420' }]}>{t('verify.checking')}</Text>
+            <Text style={[type.small, { color: '#1C2420' }]}>{live ? t('verify.checkingLive') : t('verify.checkingDemo')}</Text>
+          </View>
+        )}
+        {phase.kind === 'rejected' && (
+          <View style={styles.banner}>
+            <Text style={[type.bodyStrong, { color: '#1C2420' }]}>{t('verify.rejected')}</Text>
+            <Text style={[type.small, { color: '#1C2420' }]}>{phase.result.feedback}</Text>
+          </View>
+        )}
+        {phase.kind === 'error' && <Notice tone="warn" text={`${phase.message} Your photo is still here.`} />}
+        {pickError && <Notice tone="warn" text={pickError} />}
+        <Text style={[type.tiny, { color: '#F4F3EC', textAlign: 'center' }]}>{live ? t('verify.liveNote') : t('verify.demoNote')}</Text>
 
-      {phase.kind === 'rejected' && (
-        <Card tint={colors.sunsetSoft} style={{ gap: spacing.xs }}>
-          <Text style={type.heading}>{t('verify.rejected')}</Text>
-          <Text style={type.body}>{phase.result.feedback}</Text>
-          {phase.result.observations && <Text style={type.small}>Seen: {phase.result.observations}</Text>}
-        </Card>
-      )}
-      {phase.kind === 'error' && <Notice tone="warn" icon="wifi-off" text={`${phase.message} Your photo is still here – try again.`} />}
-
-      {!live && demoMode && phase.kind !== 'checking' && (
-        <Card tint={colors.paper} style={{ gap: spacing.xs }}>
-          <Text style={type.tiny}>DEMO: NEXT SIMULATED RESULT</Text>
-          <View style={styles.segment} accessibilityRole="radiogroup">
+        {!live && demoMode && phase.kind !== 'checking' && (
+          <View style={styles.demoRow} accessibilityRole="radiogroup" accessibilityLabel="Demo verification result">
             {(['accept', 'reject'] as const).map((o) => (
-              <Pressable
-                key={o}
-                onPress={() => setDemoOutcome(o)}
-                accessibilityRole="radio"
-                accessibilityLabel={o === 'accept' ? 'Simulate acceptance' : 'Simulate rejection to test retry'}
-                accessibilityState={{ checked: demoOutcome === o }}
-                style={[styles.segBtn, demoOutcome === o && { backgroundColor: o === 'accept' ? colors.grass : colors.sunset }]}
-              >
-                <Text style={styles.segText}>{o === 'accept' ? 'Accept' : 'Reject (test retry)'}</Text>
+              <Pressable key={o} onPress={() => setDemoOutcome(o)} accessibilityRole="radio" accessibilityState={{ checked: demoOutcome === o }} style={[styles.demoBtn, demoOutcome === o && { backgroundColor: colors.surface }]}>
+                <Text style={[type.tiny, { color: demoOutcome === o ? colors.text : '#F4F3EC' }]}>{o === 'accept' ? 'Demo: accept' : 'Demo: reject'}</Text>
               </Pressable>
             ))}
           </View>
-        </Card>
-      )}
+        )}
 
-      {phase.kind !== 'checking' && (
-        <Button
-          label={phase.kind === 'rejected' || phase.kind === 'error' ? t('verify.retry') : t('verify.submit')}
-          icon="send"
-          variant="sunset"
-          disabled={!image}
-          onPress={() => void submit()}
-          accessibilityHint={image ? undefined : 'Take or choose a photo first'}
-        />
-      )}
-    </ScreenShell>
+        {image && phase.kind !== 'checking' ? (
+          <View style={styles.actions}>
+            <Button label={t('verify.retake')} variant="secondary" onPress={() => void pick('camera')} style={{ flex: 1 }} />
+            <Button label={phase.kind === 'rejected' || phase.kind === 'error' ? t('verify.retry') : t('verify.submit')} onPress={() => void submit()} style={{ flex: 1 }} />
+          </View>
+        ) : phase.kind !== 'checking' ? (
+          <View style={styles.shutterRow}>
+            <Pressable onPress={() => void pick('library')} accessibilityRole="button" accessibilityLabel={t('verify.library')} style={styles.side}>
+              <MaterialCommunityIcons name="image-outline" size={26} color="#F4F3EC" />
+            </Pressable>
+            <Pressable onPress={() => void pick('camera')} accessibilityRole="button" accessibilityLabel={t('verify.camera')} style={[styles.shutter, { borderColor: '#F4F3EC' }]}>
+              <View style={[styles.shutterCore, { backgroundColor: colors.surface }]} />
+            </Pressable>
+            <View style={styles.side} />
+          </View>
+        ) : null}
+      </View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: spacing.sm },
-  bigPick: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: radii.lg,
-    borderWidth: 2,
-    borderBottomWidth: 5,
-    borderColor: colors.ink,
-    backgroundColor: colors.butterSoft,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-  },
-  polaroid: {
-    backgroundColor: colors.white,
-    padding: spacing.sm,
-    paddingBottom: spacing.xl,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    borderRadius: 6,
-    transform: [{ rotate: '-1.5deg' }],
-  },
-  photo: { width: '100%', aspectRatio: 4 / 3, borderRadius: 3, backgroundColor: colors.paperDeep },
-  caption: { position: 'absolute', bottom: 6, left: 12, right: 12, fontFamily: fonts.display, fontSize: 15, color: colors.inkSoft },
-  checking: { alignItems: 'center', gap: spacing.sm, paddingVertical: spacing.xl },
-  segment: { flexDirection: 'row', gap: spacing.xs },
-  segBtn: { flex: 1, minHeight: 44, borderRadius: radii.md, borderWidth: 2, borderColor: colors.ink, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
-  segText: { fontFamily: fonts.bodyBold, color: colors.ink, fontSize: 13 },
+  root: { flex: 1 },
+  placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  top: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
+  instruction: { flex: 1, backgroundColor: 'rgba(248,248,243,0.92)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
+  bottom: { position: 'absolute', left: 16, right: 16, bottom: 0, gap: 10 },
+  banner: { backgroundColor: 'rgba(248,248,243,0.94)', borderRadius: 16, padding: 12, gap: 4 },
+  actions: { flexDirection: 'row', gap: 8 },
+  shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  side: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  shutter: { width: 74, height: 74, borderRadius: 37, borderWidth: 3, alignItems: 'center', justifyContent: 'center' },
+  shutterCore: { width: 58, height: 58, borderRadius: 29 },
+  demoRow: { flexDirection: 'row', gap: 8, justifyContent: 'center' },
+  demoBtn: { minHeight: 36, paddingHorizontal: 10, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
 });
