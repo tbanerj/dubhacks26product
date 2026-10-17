@@ -7,7 +7,8 @@
  *
  *  1. Defines a transport-agnostic `PartyService` interface the UI depends on.
  *  2. Ships `SimulatedPartyService`: a deterministic local lobby with clearly-labelled
- *     demo participants, functional membership, ready states and chat.
+ *     demo participants. Used only in Demo mode.
+ *     Real parties (invite codes, Realtime chat) live in `supabaseParty.ts`.
  *  3. Offers `sendInviteViaRelay`, which POSTs to YOUR backend (EXPO_PUBLIC_PHOTON_RELAY_URL)
  *     where a Photon agent can text the invite to a friend. No Photon SDK methods are
  *     called from the app, and none are invented here.
@@ -48,8 +49,12 @@ export interface PartyService {
   invite(playerId: string): void;
   leaveParty(): void;
   setReady(ready: boolean): void;
-  setQuest(questId: string | null): void;
+  setQuest(questId: string | null, questTitle?: string | null): void;
   sendMessage(text: string): void;
+  /** Join a real party by invite code. No-op in the simulation. */
+  joinByCode(code: string): Promise<boolean>;
+  /** Last error code from a party action, if any. */
+  error(): string | null;
 }
 
 let idCounter = 0;
@@ -62,6 +67,14 @@ export class SimulatedPartyService implements PartyService {
   private timers = new Set<ReturnType<typeof setTimeout>>();
   private self: SelfInfo | null = null;
   private lineIndex = 0;
+
+  async joinByCode(): Promise<boolean> {
+    return false;
+  }
+
+  error(): string | null {
+    return null;
+  }
 
   /** Delay multiplier; tests set this to 0. */
   constructor(private readonly delayScale = 1) {}
@@ -190,9 +203,9 @@ export class SimulatedPartyService implements PartyService {
     if (this.self) this.updateMember(this.self.id, { ready });
   }
 
-  setQuest(questId: string | null) {
+  setQuest(questId: string | null, questTitle?: string | null) {
     const party = this.state.party;
-    if (party) this.set({ party: { ...party, questId } });
+    if (party) this.set({ party: { ...party, questId, questTitle: questId ? (questTitle ?? party.questTitle ?? null) : null } });
   }
 
   sendMessage(text: string) {
@@ -208,9 +221,6 @@ export class SimulatedPartyService implements PartyService {
     }
   }
 }
-
-/** The app-wide party service. Replace with a realtime implementation when available. */
-export const partyService: PartyService = new SimulatedPartyService();
 
 export type RelayResult = { ok: true } | { ok: false; reason: string };
 

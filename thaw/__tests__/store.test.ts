@@ -10,6 +10,7 @@ const accepted: VerificationResult = { accepted: true, confidence: 1, feedback: 
 
 describe('game loop', () => {
   beforeAll(async () => {
+    await useGameStore.getState().setDemoMode(true);
     await useGameStore.getState().setRegion('seattle');
   });
 
@@ -62,7 +63,7 @@ describe('game loop', () => {
 
   it('persists progress to storage', async () => {
     await new Promise((r) => setTimeout(r, 10));
-    const raw = await AsyncStorage.getItem('thaw-game-v1');
+    const raw = await AsyncStorage.getItem('thaw-game-v3');
     expect(raw).toBeTruthy();
     const saved = JSON.parse(raw!) as { state: { progress: { totalXp: number } } };
     expect(saved.state.progress.totalXp).toBe(useGameStore.getState().progress.totalXp);
@@ -73,7 +74,7 @@ describe('game loop', () => {
     const s = useGameStore.getState();
     expect(s.progress.totalXp).toBe(140);
     expect(s.progress.completions.length).toBe(1);
-    expect(s.settings.onboarded).toBe(false);
+    expect(s.settings.demoMode).toBe(true);
     expect(s.regionId).toBe('seattle');
     expect(s.quests.length).toBeGreaterThan(0);
   });

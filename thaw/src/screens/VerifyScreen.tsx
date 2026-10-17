@@ -24,6 +24,7 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
   const active = useGameStore((s) => s.activeQuest);
   const demoMode = useGameStore((s) => s.settings.demoMode);
   const completeActiveQuest = useGameStore((s) => s.completeActiveQuest);
+  const recordLiveReward = useGameStore((s) => s.recordLiveReward);
   const setPendingEvidenceUri = useGameStore((s) => s.setPendingEvidenceUri);
   const [image, setImage] = useState<EvidenceImage | null>(null);
   const [phase, setPhase] = useState<Phase>({ kind: 'capture' });
@@ -83,13 +84,29 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
         setPhase({ kind: 'rejected', result: res.result });
         return;
       }
-      const done = completeActiveQuest(res.result);
+      if (!demoMode && res.result.source !== 'gemini') {
+        setPhase({ kind: 'error', message: res.result.feedback });
+        return;
+      }
+      const done = demoMode ? completeActiveQuest(res.result) : await recordLiveReward(res.result);
       if (done.ok) {
         haptic.success();
         setPendingEvidenceUri(image.uri);
         navigation.replace('Reward');
       } else {
-        setPhase({ kind: 'error', message: done.reason === 'duplicate' ? 'This quest was already completed. Rewards are only granted once.' : 'This quest is no longer active.' });
+        const message =
+          done.reason === 'duplicate'
+            ? 'This quest was already completed. Rewards are only granted once.'
+            : done.reason === 'rate-limited'
+              ? 'Wait a few seconds between quests, then submit again.'
+              : done.reason === 'daily-limit'
+                ? 'You’ve hit today’s quest limit. Come back tomorrow for more.'
+                : done.reason === 'network'
+                  ? 'Couldn’t save this quest. Check your connection. Your photo is still here.'
+                  : done.reason === 'auth'
+                    ? 'Your session expired. Please sign in again.'
+                    : 'This quest couldn’t be saved.';
+        setPhase({ kind: 'error', message });
       }
     } finally {
       submitting.current = false;

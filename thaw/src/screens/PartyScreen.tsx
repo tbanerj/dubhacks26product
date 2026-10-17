@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Platform, Pressable, Share, StyleSheet, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 import type { TabScreenProps } from '../navigation/types';
@@ -12,6 +12,7 @@ import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
 import { unreadChatCount } from '../game/attention';
 import { sendInviteViaRelay } from '../services/photon';
+import { PARTY_ERROR_TEXT, type PartyErrorCode } from '../services/supabaseParty';
 import { config } from '../config/env';
 import { t } from '../i18n/strings';
 import type { NearbyPlayer } from '../types';
@@ -35,6 +36,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       activeQuest: st.activeQuest,
       selfId: st.player.id,
       lastChatReadAt: st.lastChatReadAt,
+      demoMode: st.settings.demoMode,
+      partyError: st.partyError,
     })),
   );
   const a = useGameStore(
@@ -45,10 +48,13 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       invitePlayer: st.invitePlayer,
       leaveParty: st.leaveParty,
       setReady: st.setReady,
+      joinPartyByCode: st.joinPartyByCode,
     })),
   );
   const [shareNote, setShareNote] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
+  const [code, setCode] = useState('');
+  const [joining, setJoining] = useState(false);
 
   useEffect(() => {
     a.connectParty();
@@ -63,8 +69,12 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
   const lastMessage = [...s.chat].reverse().find((m) => !m.system);
   const groupQuests = world.entries.filter((e) => e.quest.mode !== 'solo' && e.status !== 'completed');
 
+  const errorText = s.partyError ? (PARTY_ERROR_TEXT[s.partyError as PartyErrorCode] ?? PARTY_ERROR_TEXT.unknown) : null;
+
   const share = async () => {
-    const message = `Join my Thaw party${partyQuest ? ` for “${partyQuest.title}”` : ''}! Let's explore together – meet in a public spot.`;
+    const message = s.demoMode
+      ? `Join my Thaw party${partyQuest ? ` for “${partyQuest.title}”` : ''}! Let's explore together – meet in a public spot.`
+      : `Join my Thaw party! Open Thaw, then Party, and enter code ${party?.code ?? ''}. Let’s meet somewhere public.`;
     try {
       await Share.share({ message });
       if (config.photon.relayUrl) {
@@ -85,7 +95,13 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     ]);
   };
 
-  const statusLabel = s.connection === 'simulated' ? 'Simulated lobby' : s.connection === 'connecting' ? 'Connecting…' : s.connection;
+  const join = async () => {
+    setJoining(true);
+    await a.joinPartyByCode(code);
+    setJoining(false);
+  };
+
+  const statusLabel = s.demoMode ? 'Demo' : s.connection === 'connected' ? 'Live' : s.connection === 'connecting' ? 'Connecting' : 'Offline';
 
   return (
     <ScreenShell
@@ -96,7 +112,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
         party ? (
             <IconButton icon="dots-horizontal" label="Leave party" onPress={confirmLeave} />
         ) : (
-          <Chip label={statusLabel} icon="flask-outline" />
+          <Chip label={statusLabel} icon={s.demoMode ? 'flask-outline' : 'access-point'} />
         )
       }
     >
@@ -114,8 +130,27 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
             <Text style={[type.small, { textAlign: 'center' }]}>Party quests stay optional. Every social quest still has a solo version.</Text>
             <Button label={t('party.create')} onPress={a.createParty} style={{ alignSelf: 'stretch' }} />
           </Card>
-          <Text style={type.heading}>{t('party.nearby')}</Text>
-          {s.nearby.length === 0 ? (
+          {!s.demoMode && (
+            <Card style={{ gap: 8 }}>
+              <Text style={type.heading}>Join with a code</Text>
+              <Text style={type.small}>Ask a friend for their 6-character party code.</Text>
+              <TextInput
+                value={code}
+                onChangeText={setCode}
+                autoCapitalize="characters"
+                autoCorrect={false}
+                maxLength={8}
+                placeholder="ABC234"
+                placeholderTextColor={colors.textFaint}
+                style={[styles.codeInput, { color: colors.text, borderColor: colors.border, backgroundColor: colors.bg }]}
+                accessibilityLabel="Party code"
+              />
+              <Button label="Join party" onPress={() => void join()} loading={joining} disabled={code.trim().length < 6} />
+            </Card>
+          )}
+          {errorText ? <Notice tone="warn" text={errorText} /> : null}
+          {s.demoMode && <Text style={type.heading}>{t('party.nearby')}</Text>}
+          {!s.demoMode ? null : s.nearby.length === 0 ? (
             <EmptyState icon="account-search-outline" title="Nobody around right now." />
           ) : (
             s.nearby.map((p) => (
@@ -134,7 +169,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               </Card>
             ))
           )}
-          <Text style={[type.small, { textAlign: 'center' }]}>Distances are rough on purpose. This lobby is a local simulation, not live multiplayer.</Text>
+          {s.demoMode ? <Text style={[type.small, { textAlign: 'center' }]}>Distances are rough on purpose. This lobby is a local simulation, not live multiplayer.</Text> : null}
         </>
       ) : picking ? (
         <>
@@ -210,7 +245,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
             )}
           </Card>
 
-          {spots > 0 ? (
+          {!s.demoMode && party.code ? <Notice icon="ticket-confirmation-outline" text={`Party code ${party.code}. Share it so friends can join.`} /> : null}
+          {s.demoMode && spots > 0 ? (
             <>
               <Text style={type.heading}>Invite demo explorers</Text>
               {s.nearby
@@ -268,4 +304,5 @@ const styles = StyleSheet.create({
   questPick: { flexDirection: 'row', alignItems: 'center', gap: 8, minHeight: 56, padding: 12, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth },
   chatPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, padding: 14, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   unread: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
+  codeInput: { minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 16, fontSize: 20, letterSpacing: 4 },
 });

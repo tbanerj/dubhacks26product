@@ -1,12 +1,14 @@
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RootScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
 import { ScreenShell } from '../components/ScreenShell';
 import { EmptyState, Notice } from '../components/Paper';
+import { Button } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
 import { buildLeaderboard, type BoardKind, type BoardRow } from '../game/leaderboard';
+import { fetchGlobalLeaderboard, type GlobalRow } from '../services/cloud';
 import { formatNumber } from '../utils/format';
 import { t } from '../i18n/strings';
 
@@ -17,15 +19,41 @@ export function LeaderboardScreen(_props: RootScreenProps<'Leaderboard'>) {
   const { colors, radii } = useTheme();
   const player = useGameStore((s) => s.player);
   const progress = useGameStore((s) => s.progress);
+  const account = useGameStore((s) => s.account);
+  const demoMode = useGameStore((s) => s.settings.demoMode);
   const [range, setRange] = useState<Range>('today');
   const [metric, setMetric] = useState<Metric>('xp');
+  const [global, setGlobal] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; rows: BoardRow[] }>({ status: 'idle', rows: [] });
 
   const kind: BoardKind = metric === 'quests' ? 'quests' : metric === 'places' ? 'landmarks' : range === 'today' ? 'daily' : 'allTime';
-  const rows = useMemo(() => buildLeaderboard(kind, player, progress), [kind, player, progress]);
+  const isGlobal = !!account && !demoMode;
+  const localRows = useMemo(() => buildLeaderboard(kind, player, progress), [kind, player, progress]);
   const unit = metric === 'quests' ? 'quest' : metric === 'places' ? 'place' : 'XP';
 
+  const load = useCallback(async () => {
+    if (!account || demoMode) return;
+    setGlobal((g) => ({ ...g, status: 'loading' }));
+    const res = await fetchGlobalLeaderboard(kind, 50);
+    if (!res.ok) {
+      setGlobal({ status: 'error', rows: [] });
+      return;
+    }
+    setGlobal({
+      status: 'ready',
+      rows: res.data.rows.map((row) => toBoardRow(row)),
+    });
+  }, [account, demoMode, kind]);
+
+  useEffect(() => {
+    if (!isGlobal) return;
+    const timer = setTimeout(() => void load(), 0);
+    return () => clearTimeout(timer);
+  }, [isGlobal, load]);
+
+  const rows = isGlobal ? global.rows : localRows;
+
   return (
-    <ScreenShell title={t('ranks.title')} subtitle="Sample rankings · Demo" back>
+    <ScreenShell title={t('ranks.title')} subtitle={isGlobal ? 'Global rankings' : 'Demo rankings'} back>
       <View style={[styles.segment, { backgroundColor: colors.surfaceMuted, borderRadius: radii.pill }]} accessibilityRole="tablist">
         <Seg label="Today" on={range === 'today'} disabled={metric !== 'xp'} onPress={() => setRange('today')} />
         <Seg label="All time" on={range === 'all'} disabled={metric !== 'xp'} onPress={() => setRange('all')} />
@@ -36,7 +64,11 @@ export function LeaderboardScreen(_props: RootScreenProps<'Leaderboard'>) {
         <Seg label="Places" on={metric === 'places'} onPress={() => setMetric('places')} />
       </View>
 
-      {rows.length === 0 ? (
+      {isGlobal && global.status === 'loading' && rows.length === 0 ? (
+        <ActivityIndicator color={colors.primary} />
+      ) : isGlobal && global.status === 'error' ? (
+        <EmptyState icon="cloud-off-outline" title="Couldn’t load the global board." action={<Button label="Try again" onPress={() => void load()} />} />
+      ) : rows.length === 0 ? (
         <EmptyState icon="trophy-outline" title="No rankings yet." />
       ) : (
         <View style={{ gap: 4 }}>
@@ -45,9 +77,13 @@ export function LeaderboardScreen(_props: RootScreenProps<'Leaderboard'>) {
           ))}
         </View>
       )}
-      <Notice icon="flask-outline" tone="demo" text={t('ranks.local')} />
+      <Notice icon={isGlobal ? 'earth' : 'flask-outline'} tone={isGlobal ? 'info' : 'demo'} text={isGlobal ? 'Scores are calculated on the server. Daily resets at your local midnight.' : t('ranks.local')} />
     </ScreenShell>
   );
+}
+
+function toBoardRow(row: GlobalRow): BoardRow {
+  return { id: `${row.rank}-${row.displayName}`, name: row.displayName, avatarHue: row.avatarHue, value: row.value, rank: row.rank, isSelf: row.isSelf, isDemo: false };
 }
 
 function Seg({ label, on, onPress, disabled }: { label: string; on: boolean; onPress: () => void; disabled?: boolean }) {

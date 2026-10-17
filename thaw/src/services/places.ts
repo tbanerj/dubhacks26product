@@ -60,6 +60,7 @@ nwr["place"="square"]["name"]${a};
 
 /** Overpass is a shared public service: be polite – cache, dedupe, and space out calls. */
 const MIN_INTERVAL_MS = 4_000;
+const OVERPASS_MIRRORS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
 let lastRequestAt = 0;
 const inflight = new Map<string, Promise<Landmark[]>>();
 
@@ -75,14 +76,26 @@ export const overpassProvider: PlacesProvider = {
       if (wait > 0) await new Promise((r) => setTimeout(r, wait));
       lastRequestAt = Date.now();
 
-      const res = await fetch(config.places.overpassUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
-        body: `data=${encodeURIComponent(buildQuery(center, radiusM))}`,
-        signal,
-      });
-      if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
-      const json: unknown = await res.json();
+      const endpoints = [...new Set([config.places.overpassUrl, ...OVERPASS_MIRRORS])];
+      let json: unknown = null;
+      let lastErr: Error = new Error('Map data unavailable.');
+      for (const url of endpoints) {
+        if (signal?.aborted) break;
+        try {
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', Accept: 'application/json' },
+            body: `data=${encodeURIComponent(buildQuery(center, radiusM))}`,
+            signal,
+          });
+          if (!res.ok) throw new Error(`Overpass HTTP ${res.status}`);
+          json = await res.json();
+          break;
+        } catch (e) {
+          lastErr = e instanceof Error ? e : lastErr;
+        }
+      }
+      if (json === null) throw lastErr;
       const parsed = OverpassResponse.parse(json);
 
       const seenNames = new Set<string>();

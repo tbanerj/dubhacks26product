@@ -10,6 +10,8 @@ import { useGameStore } from './src/store/useGameStore';
 import { useTheme } from './src/theme/useTheme';
 import { setLanguage } from './src/i18n/strings';
 import { deviceLocale } from './src/utils/format';
+import { navigationRef } from './src/navigation/navigationRef';
+import { useAuthBootstrap } from './src/hooks/useAuthBootstrap';
 
 void SplashScreen.preventAutoHideAsync().catch(() => undefined);
 setLanguage(deviceLocale());
@@ -33,6 +35,7 @@ function useHydrated(): boolean {
 function AppShell() {
   const hydrated = useHydrated();
   const { colors, scheme, type } = useTheme();
+  useAuthBootstrap(hydrated);
 
   useEffect(() => {
     if (hydrated) void SplashScreen.hideAsync().catch(() => undefined);
@@ -62,7 +65,7 @@ function AppShell() {
 
   return (
     <ErrorBoundary>
-      <NavigationContainer theme={navTheme}>
+      <NavigationContainer ref={navigationRef} theme={navTheme}>
         <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
         <RootNavigator />
       </NavigationContainer>

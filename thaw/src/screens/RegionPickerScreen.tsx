@@ -14,12 +14,11 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
   const regionId = useGameStore((s) => s.regionId);
   const mode = useGameStore((s) => s.locationMode);
   const permission = useGameStore((s) => s.permission);
-  const { setRegion, enableGps, finishOnboarding } = useGameStore.getState();
+  const { setRegion, enableGps } = useGameStore.getState();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const pick = (id: string) => {
-    finishOnboarding();
     void setRegion(id);
     navigation.goBack();
   };
@@ -27,7 +26,6 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
   const gps = async () => {
     setBusy(true);
     setError(null);
-    finishOnboarding();
     const res = await enableGps();
     setBusy(false);
     if (res.ok) navigation.goBack();

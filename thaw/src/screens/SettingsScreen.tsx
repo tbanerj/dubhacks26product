@@ -18,9 +18,14 @@ const APPEARANCES: { id: AppearancePreference; label: string }[] = [
 export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
   const { colors, type, radii } = useTheme();
   const settings = useGameStore((s) => s.settings);
+  const account = useGameStore((s) => s.account);
   const updateSettings = useGameStore((s) => s.updateSettings);
+  const setDemoMode = useGameStore((s) => s.setDemoMode);
+  const signOut = useGameStore((s) => s.signOut);
+  const deleteAccount = useGameStore((s) => s.deleteAccount);
   const resetDemo = useGameStore((s) => s.resetDemo);
   const [resetting, setResetting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const integrations = integrationStatus();
 
   const reset = () => {
@@ -68,6 +73,32 @@ export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
         />
       </Card>
 
+      <Text style={type.tiny}>ACCOUNT</Text>
+      <Card style={{ gap: 12 }}>
+        <Text style={type.bodyStrong}>{account?.email ?? 'Signed in'}</Text>
+        <Integration name="Supabase" status={integrations.supabase} demo="Accounts are not configured" />
+        <Integration name="Gemini" status={integrations.gemini} demo="Built-in quests and simulated photo checks" />
+        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+        <Button
+          label="Delete account"
+          variant="danger"
+          loading={deleting}
+          onPress={() => {
+            const go = async () => {
+              setDeleting(true);
+              const res = await deleteAccount();
+              setDeleting(false);
+              if (!res.ok) Alert.alert('Couldn’t delete account', res.error ?? 'Try again in a moment.');
+            };
+            if (Platform.OS === 'web') return void go();
+            Alert.alert('Delete account?', 'This removes your explorer, XP, pins, and parties. It cannot be undone.', [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => void go() },
+            ]);
+          }}
+        />
+      </Card>
+
       <Text style={type.tiny}>PREFERENCES</Text>
       <Card style={{ gap: 10 }}>
         <Text style={type.bodyStrong}>Appearance</Text>
@@ -87,18 +118,18 @@ export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
             );
           })}
         </View>
+        <SettingsRow
+          icon="flask-outline"
+          label="Demo mode"
+          hint="Sample cities and simulated rewards. Nothing here is saved to your account."
+          control={<Switch value={settings.demoMode} onValueChange={(v) => void setDemoMode(v)} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Demo mode" />}
+        />
       </Card>
 
-      {__DEV__ && (
+      {__DEV__ && settings.demoMode && (
         <>
           <SectionTitle>Development</SectionTitle>
           <Card style={{ gap: 12 }}>
-            <SettingsRow
-              icon="flask-outline"
-              label="Demo helpers"
-              hint="Simulated walking and verification outcomes"
-              control={<Switch value={settings.demoMode} onValueChange={(v) => updateSettings({ demoMode: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Demo helpers" />}
-            />
             <Integration name="Gemini quest writer" status={integrations.gemini} demo="Built-in quest templates" />
             <Integration name="Gemini photo check" status={integrations.gemini} demo="Simulated verification" />
             <Integration name="Photon invite relay" status={integrations.photon} demo="Local simulated lobby" />

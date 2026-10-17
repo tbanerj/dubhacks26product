@@ -52,9 +52,13 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   };
 
   const doCheckIn = () => {
-    const res = checkIn();
-    if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
-    else setCheckMsg(null);
+    const go = async () => {
+      if (!useGameStore.getState().settings.demoMode) await useGameStore.getState().refreshGps();
+      const res = checkIn();
+      if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
+      else setCheckMsg(null);
+    };
+    void go();
   };
 
   const drop = () => {

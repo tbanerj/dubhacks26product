@@ -8,7 +8,7 @@ Built with React Native + Expo SDK 57 (expo 57.0.9, React Native 0.86, Expo Go),
 
 ---
 
-## Run it (no keys needed)
+## Run it
 
 ```bash
 cd thaw
@@ -16,7 +16,11 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with **Expo Go** (SDK 57). Everything works without API keys, accounts, or a backend.
+Accounts, cloud saves, real parties, and global leaderboards need the Supabase values in `.env` (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). Those are public client values; row-level security protects the data. Copy them from `.env.example`.
+
+Gemini quest writing and photo checks use `EXPO_PUBLIC_GEMINI_API_KEY` in the app. Without that key, Thaw writes built-in quests and labels photo checks as simulated. After a live Gemini accept, XP is saved by the Supabase `complete_quest` function, which computes the score on the server.
+
+Scan the QR code with **Expo Go** (SDK 57). Email links use the `thaw://` scheme (Expo Go uses `exp://`). Add `thaw://**` and `exp://**` to the Supabase redirect allow list.
 
 You can also review the UI in a browser with `npx expo start --web`. react-native-maps has no web support, so the browser shows an illustrated board projection of the same quest hubs (`GameMap.web.tsx`).
 

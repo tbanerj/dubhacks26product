@@ -32,7 +32,7 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
       units: s.settings.units,
       preferSolo: s.settings.preferSolo,
       mobilityFriendly: s.settings.mobilityFriendly,
-      onboarded: s.settings.onboarded,
+      demoMode: s.settings.demoMode,
       worldStatus: s.worldStatus,
       worldNote: s.worldNote,
       locationMode: s.locationMode,
@@ -45,7 +45,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
     useShallow((s) => ({
       enableGps: s.enableGps,
       setManualCenter: s.setManualCenter,
-      finishOnboarding: s.finishOnboarding,
       clearSimulatedPosition: s.clearSimulatedPosition,
       reloadWorld: s.reloadWorld,
       updateSettings: s.updateSettings,
@@ -61,12 +60,12 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
 
   useEffect(() => {
     const s = useGameStore.getState();
-    if (s.landmarks.length > 0) {
+    if (s.landmarks.length > 0 && (s.settings.demoMode || s.locationMode === 'gps')) {
       useGameStore.setState({ worldStatus: 'ready' });
       if (s.locationMode === 'gps') void s.refreshGps();
       return;
     }
-    if (s.worldStatus === 'idle') void s.setRegion(s.regionId);
+    if (s.worldStatus === 'idle' || s.worldStatus === 'needs-location') void s.startWorld();
   }, []);
 
   useEffect(() => {
@@ -102,7 +101,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
     setGpsError(null);
     const res = await actions.enableGps();
     setGpsBusy(false);
-    actions.finishOnboarding();
     if (res.ok) setRecenterToken((n) => n + 1);
     else setGpsError(res.reason ?? 'Location unavailable.');
   }, [actions]);
@@ -154,7 +152,7 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
           const lm = world.lmById.get(id);
           if (lm) setFocus({ coordinate: lm.coordinate, token: Date.now() });
         }}
-        onLongPress={onLongPress}
+        onLongPress={st.demoMode ? onLongPress : undefined}
         recenterToken={recenterToken}
         focus={focus}
       />
@@ -166,7 +164,12 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
               <Critter hue={st.hue} size={36} />
             </GlassSurface>
           </Pressable>
-          <Pressable onPress={() => navigation.navigate('RegionPicker')} accessibilityRole="button" accessibilityLabel={`Location: ${posLabel}. Change location.`} style={{ flexShrink: 1 }}>
+          <Pressable
+            onPress={() => (st.demoMode ? navigation.navigate('RegionPicker') : void requestMyLocation())}
+            accessibilityRole="button"
+            accessibilityLabel={st.demoMode ? `Location: ${posLabel}. Change demo region.` : `Location: ${posLabel}. Refresh my location.`}
+            style={{ flexShrink: 1 }}
+          >
             <GlassSurface style={styles.locChip}>
               <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.text} />
               <Text style={[type.small, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>
@@ -201,12 +204,12 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             }}
           />
         )}
-        {st.locationMode !== 'gps' && <IconButton icon="navigation-variant-outline" label={t('onboard.useLocation')} glass onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
+        {st.demoMode && st.locationMode !== 'gps' && <IconButton icon="navigation-variant-outline" label={t('onboard.useLocation')} glass onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
         <IconButton icon="refresh" label="Refresh quests" glass onPress={() => void actions.reloadWorld()} />
       </View>
 
       <Text style={[styles.attribution, type.tiny, { color: colors.textSecondary, bottom: bar + SHEET_COLLAPSED - 28, backgroundColor: colors.surface }]}>
-        {st.locationMode === 'region' ? 'Sample places · ' : ''}
+        {st.demoMode && st.locationMode === 'region' ? 'Sample places · ' : ''}
         {t('explore.attribution')}
       </Text>
 
@@ -233,18 +236,8 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
         </BottomSheet>
       </View>
 
-      {!st.onboarded && (
-        <Onboarding
-          onLocation={() => void requestMyLocation()}
-          onSample={() => {
-            actions.finishOnboarding();
-            navigation.navigate('RegionPicker');
-          }}
-          onSkip={actions.finishOnboarding}
-          busy={gpsBusy}
-          hue={st.hue}
-          bottom={bar}
-        />
+      {!st.demoMode && (st.worldStatus === 'needs-location' || world.position.kind === 'none') && st.worldStatus !== 'loading' && (
+        <LocationGate permission={st.permission} note={st.worldNote} busy={gpsBusy} onEnable={() => void requestMyLocation()} />
       )}
     </View>
   );
@@ -292,18 +285,18 @@ function dataStatus(
   return null;
 }
 
-function Onboarding({ onLocation, onSample, onSkip, busy, hue, bottom }: { onLocation: () => void; onSample: () => void; onSkip: () => void; busy: boolean; hue: number; bottom: number }) {
+function LocationGate({ permission, note, busy, onEnable }: { permission: string; note: string | null; busy: boolean; onEnable: () => void }) {
   const { colors, type } = useTheme();
+  const denied = permission === 'denied';
   return (
-    <View style={[styles.scrim, { paddingBottom: bottom }]} accessibilityViewIsModal>
+    <View style={[styles.scrim, { backgroundColor: colors.bg }]} accessibilityViewIsModal>
       <View style={[styles.onboard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Critter hue={hue} size={84} mood="wow" />
-        <Text style={[type.title, { textAlign: 'center' }]}>{t('onboard.title')}</Text>
-        <Text style={[type.body, { textAlign: 'center' }]}>{t('onboard.body')}</Text>
-        <Button label={t('onboard.useLocation')} icon="crosshairs-gps" onPress={onLocation} loading={busy} />
-        <Text style={[type.small, { textAlign: 'center' }]}>{t('onboard.locationNote')}</Text>
-        <Button label={t('onboard.sample')} variant="secondary" onPress={onSample} />
-        <Button label="Just show me the map" variant="ghost" onPress={onSkip} />
+        <Critter hue={28} size={84} mood="sleepy" />
+        <Text style={[type.title, { textAlign: 'center' }]}>{denied ? 'Location is off' : 'Thaw needs your location'}</Text>
+        <Text style={[type.body, { textAlign: 'center' }]}>
+          {note ?? 'Real quests are built from public places near you. Location stays on this phone and is never shared with other players.'}
+        </Text>
+        <Button label={denied ? 'Try location again' : 'Enable location'} icon="crosshairs-gps" onPress={onEnable} loading={busy} />
       </View>
     </View>
   );

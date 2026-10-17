@@ -10,6 +10,8 @@ export type TabParamList = {
 };
 
 export type RootStackParamList = {
+  Intro: undefined;
+  Onboarding: undefined;
   Tabs: NavigatorScreenParams<TabParamList>;
   QuestDetail: { questId: string };
   ActiveQuest: undefined;
@@ -20,6 +22,7 @@ export type RootStackParamList = {
   Settings: undefined;
   EditAvatar: undefined;
   PartyChat: undefined;
+  Auth: { mode?: 'signIn' | 'signUp' | 'checkEmail' | 'forgot' | 'newPassword'; email?: string; message?: string } | undefined;
 };
 
 export type RootScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;

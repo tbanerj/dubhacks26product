@@ -15,7 +15,7 @@ import { t } from '../i18n/strings';
 
 export function YouScreen({ navigation }: TabScreenProps<'You'>) {
   const { colors, type } = useTheme();
-  const s = useGameStore(useShallow((st) => ({ player: st.player, progress: st.progress })));
+  const s = useGameStore(useShallow((st) => ({ player: st.player, progress: st.progress, syncState: st.syncState, account: st.account, demoMode: st.settings.demoMode })));
   const lp = levelProgress(s.progress.totalXp);
   const streak = currentStreak(s.progress);
   const today = dailyXp(s.progress);
@@ -36,6 +36,9 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
             {s.player.name}
           </Text>
           <Text style={type.small}>{t('profile.level', { level: lp.level })}</Text>
+          {s.account && !s.demoMode ? (
+            <Text style={type.tiny}>{s.syncState === 'syncing' ? 'Syncing' : s.syncState === 'offline' ? 'Offline' : s.syncState === 'synced' ? 'Synced' : 'Not synced yet'}</Text>
+          ) : null}
           <ProgressBar fraction={lp.fraction} label="XP progress" />
           <Text style={type.tiny}>
             {formatNumber(lp.intoLevel)} / {formatNumber(lp.levelSpan)} XP
