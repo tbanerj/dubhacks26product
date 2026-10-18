@@ -185,7 +185,7 @@ export default function App() {
             </div>
             <div className="footer-col">
               <h3>Contact</h3>
-              <a href="mailto:trinavbanerjee@gmail.com">trinavbanerjee@gmail.com</a>
+              <a href="mailto:thaw.ai.support@gmail.com">thaw.ai.support@gmail.com</a>
             </div>
           </div>
           <div className="footer-word" aria-hidden="true">Thaw</div>
