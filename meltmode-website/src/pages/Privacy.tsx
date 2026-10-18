@@ -26,7 +26,7 @@ export default function Privacy() {
       <div className="legal-summary">
         <h2>The short version</h2>
         <ul>
-          <li>We collect only what MeltMode needs to work.</li>
+          <li>We collect only what Thaw needs to work.</li>
           <li>We don't sell your information or show you ads.</li>
           <li>The app uses your location only while it's open.</li>
           <li>If you play by text, we never see your GPS location or contacts.</li>
@@ -36,8 +36,8 @@ export default function Privacy() {
 
       <h2>Who we are</h2>
       <p>
-        MeltMode is a real-world quest game made by a small student team. In this policy, "we" means
-        the MeltMode team. You can reach any of us at <ContactEmails />.
+        Thaw is a real-world quest game made by a small student team. In this policy, "we" means
+        the Thaw team. You can reach any of us at <ContactEmails />.
       </p>
 
       <h2>This website</h2>
@@ -49,10 +49,16 @@ export default function Privacy() {
 
       <h2>Playing by text (iMessage)</h2>
       <p>
-        You can play MeltMode over iMessage without the app. Your messages, photos and our replies travel
+        You can play Thaw over iMessage without the app. Your messages, photos and our replies travel
         through Apple's iMessage and Photon (Spectrum Cloud), the messaging service we use. We don't run our
         own inbox, so those companies carry your messages and may keep them under their own privacy
         policies.
+      </p>
+      <p>
+        If you sign up for play by text, we send the phone number you provide to Photon (Spectrum Cloud)
+        to register you as a shared project user and get the number assigned to your conversation. We do not
+        send a text as part of signup. When you tap the text link, your messaging app starts a conversation
+        with Thaw. Photon processes your number under its own privacy policy.
       </p>
 
       <h3 className="legal-sub">What we store</h3>
@@ -77,8 +83,9 @@ export default function Privacy() {
           (hashed) version of the code. Nothing is linked unless you confirm it in the app.
         </li>
         <li>
-          <strong>Testers.</strong> If you're registered as a tester, your phone number or email is also
-          saved in our Photon account.
+          <strong>Text signup.</strong> The phone number you submit for text signup is stored in our Photon
+          project so its shared messaging service can route your conversation. Our website does not save
+          that number in its own database.
         </li>
       </ul>
 
@@ -111,7 +118,7 @@ export default function Privacy() {
         logs.
       </p>
 
-      <h2>The MeltMode app</h2>
+      <h2>The Thaw app</h2>
       <ul>
         <li>
           <strong>Location.</strong> With your permission, the app uses your location only while it's open,
@@ -148,13 +155,13 @@ export default function Privacy() {
       </ul>
 
       <h2>Age requirement</h2>
-      <p>You must be 18 or older to use MeltMode.</p>
+      <p>You must be 18 or older to use Thaw.</p>
 
       <h2>Your choices</h2>
       {/* CONFIRM: how app players delete their data (a button in the app? by email?) */}
       <p>
         You can turn off location and photo access in your phone's settings at any time. You can delete
-        your MeltMode data at any time. To ask what information we have about you, or for help deleting
+        your Thaw data at any time. To ask what information we have about you, or for help deleting
         it, email us at <ContactEmails />.
       </p>
 

@@ -54,9 +54,9 @@ export default function Download() {
       <section className="container download-page">
         <div className="download-head">
           <span className="pill">Download</span>
-          <h1>Get MeltMode on your phone</h1>
+          <h1>Get Thaw on your phone</h1>
           <p>
-            MeltMode is coming soon to iPhone and Android. We’ll add the download links here the moment
+            Thaw is coming soon to iPhone and Android. We’ll add the download links here the moment
             the app is live.
           </p>
         </div>
