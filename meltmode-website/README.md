@@ -41,13 +41,54 @@ Other commands:
 | `src/pages/ByText.tsx` | Text-message sign-up form |
 | `src/pages/Privacy.tsx` | Privacy policy |
 | `src/index.css` | Colours, font, spacing and shared styles |
+| `api/public/signup.js` | Vercel proxy from the live site to `PHOTON_SIGNUP_URL` |
+| `vite.config.ts` | Local-only proxy from `/api/public/signup` to `127.0.0.1:3001` |
 
-Pages are reached with links like `#/demo`, so the site works on any static host
-(Netlify, Vercel, GitHub Pages) as a frontend. For text signup to work after deployment, configure a
-public HTTPS reverse-proxy route from the site to the long-running Photon Bun service. Keep the Bun API
-on loopback/private networking, set `THAW_SIGNUP_ALLOWED_ORIGINS` to the exact public frontend origin
-(including when a proxy terminates HTTPS), and provide project credentials as server secrets. See `../photon/README.md` for the
-server setup and proxy requirements. A static host by itself cannot provision Spectrum users.
+Pages are reached with links like `#/demo`, so the site works as a static frontend.
+Text signup on the live site needs the proxy below. A static host by itself cannot register Spectrum users.
+
+## Live site on Vercel
+
+The deployed site is [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/).
+Set the Vercel project's root directory to `meltmode-website`. Photon stays on a computer you control.
+The Expo app is hosted on its own and does not use this proxy.
+
+The form in `src/pages/ByText.tsx` always calls `fetch('/api/public/signup')` on the site's own origin.
+Locally, the Vite proxy in `vite.config.ts` sends that path to `http://127.0.0.1:3001`.
+On Vercel, `api/public/signup.js` does the same job: it POSTs the body to `PHOTON_SIGNUP_URL` and
+forwards the browser `Origin` header. Photon checks that origin. The function does not add CORS headers,
+and the page must not call the tunnel URL directly.
+
+Signup on the public site works only while all of the following are true:
+
+1. `bun start` is running in `photon/` with `THAW_TRANSPORT=photon`, `PROJECT_ID`, and `PROJECT_SECRET`.
+2. `photon/.env` allows the live site. Setting this variable replaces the localhost defaults, so keep the local origins in the same list:
+
+   ```
+   THAW_SIGNUP_ALLOWED_ORIGINS=https://dubhacks26product.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+   ```
+
+   Restart `bun start` after changing it. Leave `THAW_API_HOST=127.0.0.1`. There is no wildcard: a Vercel preview URL is a different origin and is rejected until you add that exact origin.
+3. A tunnel is forwarding public HTTPS to the local Photon port. From another terminal, while `bun start` is up:
+
+   ```sh
+   cloudflared tunnel --url http://127.0.0.1:3001
+   ```
+
+   Cloudflare prints a host such as `https://something.trycloudflare.com`. That host changes every time you start a quick tunnel.
+4. The Vercel project has this environment variable, using the host from the tunnel, and the site has been redeployed after `api/public/signup.js` was added:
+
+   ```
+   PHOTON_SIGNUP_URL=https://something.trycloudflare.com/api/public/signup
+   ```
+
+   Update that variable whenever the tunnel host changes. An ngrok reserved domain stays the same across restarts. The value must be `https`. If it is missing or the tunnel is down, the form shows signup unavailable.
+
+Photon credentials stay in `photon/.env`. Do not add `PROJECT_SECRET` to Vercel.
+
+After a successful signup, the page shows an `sms:` link to the number Spectrum assigned. Text replies still require the local `bun start` process. The Photon dashboard has no webhook URL to configure.
+
+One limit of the tunnel: Photon counts signup attempts by the connecting IP, and every live signup arrives from the tunnel. The cap is 5 attempts per 10 minutes for the whole site while the tunnel is in use.
 
 ## Editing content
 

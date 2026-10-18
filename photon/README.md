@@ -33,7 +33,7 @@ Copy `.env.example` to `.env` if you do not already have one. For live iMessage,
 | `THAW_DATABASE_PATH` | Server | SQLite file. Default `data/thaw.sqlite`. |
 | `THAW_MEDIA_DIR` | Server | Private photo files. Default `data/media`. |
 | `PORT` | Server | Local API, default `3001`, bound to `THAW_API_HOST` (`127.0.0.1` by default). |
-| `THAW_SIGNUP_ALLOWED_ORIGINS` | Server | Exact `Origin` values for `POST /api/public/signup`, comma-separated. Unset allows only the local Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`. |
+| `THAW_SIGNUP_ALLOWED_ORIGINS` | Server | Exact `Origin` values for `POST /api/public/signup`, comma-separated. Unset allows only `http://localhost:5173` and `http://127.0.0.1:5173`. Setting it replaces those defaults, so keep the local origins in the list when you add `https://dubhacks26product.vercel.app`. |
 | `THAW_DEV_API` | Server | `1` enables the development linking header. Photon mode leaves this off unless you set it. |
 | `THAW_*` image and timezone settings | Server | Limits and the default timezone `America/Los_Angeles`. Thaw does not guess a timezone from a phone number. |
 
@@ -76,7 +76,19 @@ The website button is an `sms:` link to that assigned number. The person texts i
 
 `type: "dedicated"` is the Business-line API and is not used. Do not hardcode one Thaw number: on a shared plan each person can be routed through a different pool number.
 
-If the project's shared-user cap is full, Spectrum rejects the create and the site shows signup unavailable. Raise the cap or remove an old user in the Photon dashboard. Set `THAW_SIGNUP_ALLOWED_ORIGINS` to the public site origin before exposing the route through a reverse proxy. Keep this process on `127.0.0.1`.
+If the project's shared-user cap is full, Spectrum rejects the create and the site shows signup unavailable. Raise the cap or remove an old user in the Photon dashboard.
+
+Keep this process on `127.0.0.1`. The live website does not run Photon. Vercel calls a tunnel, and the tunnel calls this process.
+
+For [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/), set:
+
+```
+THAW_SIGNUP_ALLOWED_ORIGINS=https://dubhacks26product.vercel.app,http://localhost:5173,http://127.0.0.1:5173
+```
+
+Restart `bun start` after that change. Then open a tunnel to port 3001 and set the Vercel variable `PHOTON_SIGNUP_URL` to `https://<tunnel-host>/api/public/signup`. The site function `meltmode-website/api/public/signup.js` forwards the browser `Origin` to that URL. Full steps are in `../meltmode-website/README.md`. A preview deployment origin has to be added explicitly. There is no wildcard.
+
+Local `npm run dev` in `meltmode-website/` still proxies straight to `127.0.0.1:3001` and does not need the tunnel.
 
 ## Photos
 
