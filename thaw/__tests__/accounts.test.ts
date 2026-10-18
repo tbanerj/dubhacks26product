@@ -58,6 +58,11 @@ describe('auth validation', () => {
     expect(validateDisplayName('   ')).toBeTruthy();
     expect(validateDisplayName('代々木の探検家🌳')).toBeNull();
     expect(validateDisplayName('x'.repeat(25))).toMatch(/24/);
+    expect(validateDisplayName('\u0000\u0007')).toBeTruthy();
+  });
+  it('rejects passwords outside the 8 to 72 character window', () => {
+    expect(validatePassword('')).toMatch(/at least/);
+    expect(validatePassword(`long1${'a'.repeat(72)}`)).toMatch(/72/);
   });
   it('maps Supabase error codes to friendly text', () => {
     expect(friendlyAuthError({ message: 'x', code: 'invalid_credentials' })).toMatch(/incorrect/);
@@ -166,6 +171,12 @@ describe('server rewards', () => {
 
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'daily_limit' } });
     await expect(submitCompletion({ quest, landmarkName: 'Park', partySize: 1, solo: true })).resolves.toMatchObject({ ok: false, error: 'daily_limit' });
+
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'invalid_input' } });
+    await expect(submitCompletion({ quest, landmarkName: 'Park', partySize: 1, solo: true })).resolves.toMatchObject({ ok: false, error: 'invalid' });
+
+    mockRpc.mockRejectedValueOnce(new Error('network down'));
+    await expect(submitCompletion({ quest, landmarkName: 'Park', partySize: 1, solo: true })).resolves.toMatchObject({ ok: false, error: 'network' });
   });
 });
 
