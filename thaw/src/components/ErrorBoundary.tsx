@@ -27,9 +27,6 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode; 
         <Critter hue={28} size={96} mood="sleepy" />
         <Text style={styles.title}>Thaw slipped on some ice.</Text>
         <Text style={styles.body}>Something went wrong on this screen. Your progress is saved.</Text>
-        <Text style={styles.detail} numberOfLines={3}>
-          {this.state.error.message}
-        </Text>
         <Button
           label="Try again"
           icon="refresh"
@@ -48,5 +45,4 @@ const styles = StyleSheet.create({
   root: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: spacing.md, padding: spacing.xl, backgroundColor: colors.paper },
   title: { fontSize: 22, fontWeight: '700', color: colors.ink, textAlign: 'center' },
   body: { fontSize: 15, color: colors.inkSoft, textAlign: 'center' },
-  detail: { fontSize: 12, color: colors.inkFaint, textAlign: 'center' },
 });

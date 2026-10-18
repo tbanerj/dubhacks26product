@@ -72,7 +72,15 @@ export function ScreenShell({
       </View>
       {back ? (
         <View pointerEvents="box-none" style={[styles.backFloat, { top: backTop, left: Math.max(insets.left, 16) }]}>
-          <IconButton icon="chevron-left" label="Go back" glass glassVariant="regular" onPress={() => nav.goBack()} />
+          <IconButton
+            icon="chevron-left"
+            label="Go back"
+            glass
+            glassVariant="regular"
+            onPress={() => {
+              if (nav.canGoBack()) nav.goBack();
+            }}
+          />
         </View>
       ) : null}
       {scroll ? (

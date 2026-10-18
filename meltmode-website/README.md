@@ -3,8 +3,7 @@
 The website for Thaw, a real-world quest game that helps people in Seattle meet new friends.
 It has a home page, a playable demo, download links, text-message sign-up and a privacy policy.
 
-The frontend is built with React, TypeScript and Vite. Text-message sign-up calls the Photon Bun service;
-the Spectrum project credentials must remain on that server and must never be added to the website bundle.
+The frontend is built with React, TypeScript and Vite. It has no database and no `VITE_` environment variables. Text-message sign-up calls the Photon Bun service; the Spectrum project credentials must remain on that server and must never be added to the website bundle.
 
 ## Run it on your computer
 
@@ -44,14 +43,22 @@ Other commands:
 | `api/public/signup.js` | Vercel proxy from the live site to `PHOTON_SIGNUP_URL` |
 | `vite.config.ts` | Local-only proxy from `/api/public/signup` to `127.0.0.1:3001` |
 
-Pages are reached with links like `#/demo`, so the site works as a static frontend.
-Text signup on the live site needs the proxy below. A static host by itself cannot register Spectrum users.
+Pages are hash routes, so the site works as a static frontend:
+
+| Hash | Page |
+| --- | --- |
+| `#/` | Home |
+| `#/demo` | Interactive demo |
+| `#/download` | App store links |
+| `#/text` | Text-message sign-up |
+| `#/privacy` | Privacy policy (footer only) |
+
+Text signup on the live site needs the proxy below. A static host by itself cannot register Spectrum users. The site does not store signups, accounts, or quest progress.
 
 ## Live site on Vercel
 
 The deployed site is [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/).
-Set the Vercel project's root directory to `meltmode-website`. Photon stays on a computer you control.
-The Expo app is hosted on its own and does not use this proxy.
+Set the Vercel project's root directory to `meltmode-website`. There is no `vercel.json` in this repo; the project settings live in the Vercel dashboard. The build is the Vite static site plus one serverless function, `api/public/signup.js`. That function reads `PHOTON_SIGNUP_URL` and nothing else. Photon stays on a computer you control. The Expo app is hosted on its own and does not use this proxy.
 
 The form in `src/pages/ByText.tsx` always calls `fetch('/api/public/signup')` on the site's own origin.
 Locally, the Vite proxy in `vite.config.ts` sends that path to `http://127.0.0.1:3001`.
@@ -96,4 +103,4 @@ Most words live in lists at the top of each page file, so you can change text wi
 
 Still to fill in:
 
-- `APP_STORE_URL` and `PLAY_STORE_URL` in `src/pages/Download.tsx` once the app is published
+- `APP_STORE_URL` and `PLAY_STORE_URL` in `src/pages/Download.tsx` once the app is published. Both are still empty strings.

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View, type TextInputProps } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { RootScreenProps } from '../navigation/types';
@@ -123,12 +123,13 @@ export function AuthScreen({ navigation, route }: RootScreenProps<'Auth'>) {
       else setError(r.error);
     });
 
+  useEffect(() => {
+    if (error) console.warn('auth', error);
+  }, [error]);
+
   if (!isSupabaseConfigured()) {
-    return (
-      <ScreenShell title="Accounts" back>
-        <Notice tone="warn" text="Accounts aren’t configured in this build. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY to .env and restart with npx expo start -c." />
-      </ScreenShell>
-    );
+    console.warn('auth', 'Supabase is not configured in this build.');
+    return <ScreenShell title="Accounts" back>{null}</ScreenShell>;
   }
 
   const titles: Record<AuthMode, [string, string]> = {
@@ -204,7 +205,6 @@ export function AuthScreen({ navigation, route }: RootScreenProps<'Auth'>) {
               </View>
             )}
 
-            {error && <Notice tone="warn" icon="alert-circle-outline" text={error} />}
             {info && <Notice icon="check-circle-outline" text={info} />}
 
             <Button

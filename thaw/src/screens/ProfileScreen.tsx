@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 import type { TabScreenProps } from '../navigation/types';
 import { useGameStore, type AppearancePreference } from '../store/useGameStore';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, ProgressBar, SettingsRow } from '../components/Paper';
+import { AppSwitch, Card, ProgressBar, SettingsRow } from '../components/Paper';
 import { Button, IconButton } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
@@ -71,13 +71,7 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
           label="Demo mode"
           hint="Stand in for GPS with a chosen city. Quests, parties, photos, and your account stay real."
           control={
-            <Switch
-              value={s.demoMode}
-              onValueChange={(v) => void setDemoMode(v)}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.surface}
-              accessibilityLabel="Demo mode"
-            />
+            <AppSwitch value={s.demoMode} onValueChange={(v) => void setDemoMode(v)} accessibilityLabel="Demo mode" />
           }
         />
         {s.demoMode ? (
@@ -122,11 +116,9 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
           label="Units"
           value={settings.units === 'imperial' ? 'Imperial' : 'Metric'}
           control={
-            <Switch
+            <AppSwitch
               value={settings.units === 'imperial'}
               onValueChange={(v) => updateSettings({ units: v ? 'imperial' : 'metric' })}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.surface}
               accessibilityLabel="Imperial units"
             />
           }
@@ -136,13 +128,7 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
           label="Prefer solo"
           hint="New quests default to solo"
           control={
-            <Switch
-              value={settings.preferSolo}
-              onValueChange={(v) => updateSettings({ preferSolo: v })}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.surface}
-              accessibilityLabel="Prefer solo quests"
-            />
+            <AppSwitch value={settings.preferSolo} onValueChange={(v) => updateSettings({ preferSolo: v })} accessibilityLabel="Prefer solo quests" />
           }
         />
         <SettingsRow
@@ -150,13 +136,7 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
           label="Shorter walks"
           hint="Suggest shorter, lower-mobility quests"
           control={
-            <Switch
-              value={settings.mobilityFriendly}
-              onValueChange={(v) => updateSettings({ mobilityFriendly: v })}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.surface}
-              accessibilityLabel="Shorter walks"
-            />
+            <AppSwitch value={settings.mobilityFriendly} onValueChange={(v) => updateSettings({ mobilityFriendly: v })} accessibilityLabel="Shorter walks" />
           }
         />
         <SettingsRow icon="account-edit-outline" label="Profile" hint={s.player.name} onPress={() => navigation.navigate('EditAvatar')} />
@@ -170,7 +150,7 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
               setDeleting(true);
               const res = await deleteAccount();
               setDeleting(false);
-              if (!res.ok) Alert.alert('Couldn’t delete account', res.error ?? 'Try again in a moment.');
+              if (!res.ok) console.warn('delete-account', res.error ?? 'Delete failed.');
             };
             if (Platform.OS === 'web') return void go();
             Alert.alert('Delete account?', 'This removes your explorer, XP, pins, and parties. It cannot be undone.', [

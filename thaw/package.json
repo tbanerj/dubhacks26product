@@ -10,7 +10,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "expo lint",
-    "test": "jest"
+    "test": "jest",
+    "postinstall": "node scripts/patch-expo-jsi-signing.js"
   },
   "dependencies": {
     "@expo-google-fonts/fredoka": "^0.4.1",

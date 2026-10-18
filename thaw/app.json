@@ -9,14 +9,19 @@
     "backgroundColor": "#F8F8F3",
     "ios": {
       "supportsTablet": true,
+      "buildNumber": "1",
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Thaw uses your approximate location to show quests and public landmarks near you. You can also explore a sample city instead.",
         "NSCameraUsageDescription": "Thaw uses the camera so you can photograph a landmark detail as quest evidence.",
-        "NSPhotoLibraryUsageDescription": "Thaw lets you pick a photo of a landmark detail as quest evidence."
+        "NSPhotoLibraryUsageDescription": "Thaw lets you pick a photo of a landmark detail as quest evidence.",
+        "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.tbanerj.thaw"
+      "bundleIdentifier": "com.tbanerj.thaw",
+      "appleTeamId": "B47M7J8896"
     },
     "android": {
+      "package": "com.tbanerj.thaw",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#F8F8F3",
         "foregroundImage": "./assets/android-icon-foreground.png",

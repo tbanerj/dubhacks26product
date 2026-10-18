@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -8,12 +8,13 @@ import type { RootScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
 import { useWorld } from '../hooks/useWorld';
 import { ScreenShell } from '../components/ScreenShell';
-import { EmptyState, Notice } from '../components/Paper';
+import { EmptyState } from '../components/Paper';
 import { Button, IconButton } from '../components/Button';
 import { useTheme } from '../theme/useTheme';
 import { isLiveVerificationConfigured, verifyEvidence, type EvidenceImage } from '../services/gemini';
 import type { VerificationResult } from '../types';
 import { t } from '../i18n/strings';
+import { isExampleQuest } from '../game/localQuests';
 
 type Phase = { kind: 'capture' } | { kind: 'checking' } | { kind: 'rejected'; result: VerificationResult } | { kind: 'error'; message: string };
 
@@ -33,6 +34,12 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
   const [demoOutcome, setDemoOutcome] = useState<'accept' | 'reject'>('accept');
   const submitting = useRef(false);
   const live = isLiveVerificationConfigured();
+  useEffect(() => {
+    if (pickError) console.warn('verify', pickError);
+  }, [pickError]);
+  useEffect(() => {
+    if (phase.kind === 'error') console.warn('verify', phase.message);
+  }, [phase]);
 
   const entry = world.active;
   if (!active || !entry) {
@@ -75,9 +82,14 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
     submitting.current = true;
     setPhase({ kind: 'checking' });
     try {
-      const res = await verifyEvidence({ quest: entry.quest, landmarkName: entry.landmark.name, image }, { demoOutcome });
+      const example = isExampleQuest(entry.quest);
+      const res = await verifyEvidence(
+        { quest: entry.quest, landmarkName: entry.landmark.name, image },
+        example ? { example: true, demoOutcome: 'accept' } : { demoOutcome },
+      );
       if (!res.ok) {
-        setPhase({ kind: 'error', message: res.error.message });
+        console.warn('verify', res.error.message);
+        setPhase({ kind: 'capture' });
         return;
       }
       if (!res.result.accepted) {
@@ -85,11 +97,12 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
         setPhase({ kind: 'rejected', result: res.result });
         return;
       }
-      if (!demoMode && res.result.source !== 'gemini') {
-        setPhase({ kind: 'error', message: res.result.feedback });
+      if (!example && !demoMode && res.result.source !== 'gemini') {
+        console.warn('verify', res.result.feedback);
+        setPhase({ kind: 'capture' });
         return;
       }
-      const done = account && res.result.source === 'gemini' ? await recordLiveReward(res.result) : completeActiveQuest(res.result);
+      const done = !example && account && res.result.source === 'gemini' ? await recordLiveReward(res.result) : completeActiveQuest(res.result);
       if (done.ok) {
         haptic.success();
         setPendingEvidenceUri(image.uri);
@@ -149,8 +162,6 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
             <Text style={[type.small, { color: colors.text }]}>{phase.result.feedback}</Text>
           </View>
         )}
-        {phase.kind === 'error' && <Notice tone="warn" text={`${phase.message} Your photo is still here.`} />}
-        {pickError && <Notice tone="warn" text={pickError} />}
         <Text style={[type.tiny, { color: '#F4F3EC', textAlign: 'center' }]}>{live ? t('verify.liveNote') : t('verify.demoNote')}</Text>
 
         {!live && demoMode && phase.kind !== 'checking' && (

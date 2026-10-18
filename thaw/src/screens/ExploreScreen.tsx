@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import { Alert, Linking, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
@@ -9,12 +9,13 @@ import { useWorld } from '../hooks/useWorld';
 import { GameMap } from '../components/map/GameMap';
 import { QuestCard, QuestPreview } from '../components/QuestCard';
 import { Button, IconButton } from '../components/Button';
-import { EmptyState, Notice } from '../components/Paper';
+import { AppSwitch, EmptyState } from '../components/Paper';
 import { BottomSheet } from '../components/BottomSheet';
 import { GlassSurface } from '../components/GlassSurface';
 import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
 import { regionById } from '../data/regions';
+import { isExampleQuest } from '../game/localQuests';
 import { tabBarOffset } from '../navigation/TabBar';
 import { t } from '../i18n/strings';
 import { watchPosition } from '../services/location';
@@ -56,7 +57,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   const [recenterToken, setRecenterToken] = useState(0);
   const [focus, setFocus] = useState<{ coordinate: { latitude: number; longitude: number }; token: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
-  const [gpsError, setGpsError] = useState<string | null>(null);
 
   useEffect(() => {
     const s = useGameStore.getState();
@@ -111,11 +111,10 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
 
   const requestMyLocation = useCallback(async () => {
     setGpsBusy(true);
-    setGpsError(null);
     const res = await actions.enableGps();
     setGpsBusy(false);
     if (res.ok) setRecenterToken((n) => n + 1);
-    else setGpsError(res.reason ?? 'Location unavailable.');
+    else if (res.reason) console.warn('location', res.reason);
   }, [actions]);
 
   const onLongPress = useCallback(
@@ -134,7 +133,8 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   );
 
   const selectedEntries = useMemo(() => world.entries.filter((e) => e.landmark.id === selectedId), [world.entries, selectedId]);
-  const preview = selectedEntries.find((e) => e.status !== 'completed') ?? selectedEntries[0] ?? world.active ?? world.entries.find((e) => e.status !== 'completed') ?? world.entries[0] ?? null;
+  const exampleQuest = world.entries.find((e) => isExampleQuest(e.quest) && e.status !== 'completed');
+  const preview = selectedEntries.find((e) => e.status !== 'completed') ?? selectedEntries[0] ?? exampleQuest ?? world.active ?? world.entries.find((e) => e.status !== 'completed') ?? world.entries[0] ?? null;
   const region = regionById(st.regionId);
   const bar = tabBarOffset(insets.bottom);
   const side = Math.max(spacing.screen, insets.left);
@@ -207,28 +207,22 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             </View>
           </Pressable>
         </View>
-        {gpsError && (
-          <Pressable onPress={() => setGpsError(null)} accessibilityRole="button" accessibilityLabel="Dismiss location message">
-            <Notice tone="warn" icon="map-marker-off-outline" text={`${gpsError} You can keep playing in a sample city.`} />
-          </Pressable>
-        )}
       </View>
 
       <View style={[styles.controls, { top: insets.top + 88, right: Math.max(16, insets.right) }]} pointerEvents="box-none">
-        <IconButton icon="crosshairs-gps" label="Recenter on me" glass glassVariant="regular" onPress={() => setRecenterToken((n) => n + 1)} />
+        <MapControl icon="crosshairs-gps" label="Recenter on me" onPress={() => setRecenterToken((n) => n + 1)} />
         {world.position.kind === 'simulated' && (
-          <IconButton
+          <MapControl
             icon="foot-print"
             label="Return to real position"
-            glass
             onPress={() => {
               actions.clearSimulatedPosition();
               setRecenterToken((n) => n + 1);
             }}
           />
         )}
-        {st.locationMode !== 'gps' && <IconButton icon="navigation-variant-outline" label={t('onboard.useLocation')} glass onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
-        <IconButton icon="refresh" label="Refresh quests" glass onPress={() => void actions.reloadWorld()} />
+        {st.locationMode !== 'gps' && <MapControl icon="navigation-variant-outline" label={t('onboard.useLocation')} onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
+        <MapControl icon="refresh" label="Refresh quests" onPress={() => void actions.reloadWorld()} />
       </View>
 
       <Text style={[styles.attribution, type.tiny, { color: colors.textSecondary, bottom: collapsed + 8, left: side, backgroundColor: colors.surface }]}>
@@ -241,7 +235,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
           <ScrollView
             contentContainerStyle={{ paddingHorizontal: side, paddingBottom: bar + 20, gap: 10 }}
             keyboardShouldPersistTaps="handled"
-            refreshControl={<RefreshControl refreshing={st.worldStatus === 'loading'} onRefresh={() => void actions.reloadWorld()} tintColor={colors.primary} />}
           >
             <View style={styles.filters}>
               <Filter label="Solo quests" value={st.preferSolo} onChange={(v) => actions.updateSettings({ preferSolo: v })} />
@@ -258,6 +251,7 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
                 onPress={() => {
                   setSelectedId(item.landmark.id);
                   setFocus({ coordinate: item.landmark.coordinate, token: Date.now() });
+                  navigation.navigate('QuestDetail', { questId: item.quest.id });
                 }}
               />
             ))}
@@ -294,28 +288,54 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
 }
 
 function Filter({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
-  const { colors, type } = useTheme();
+  const { type } = useTheme();
   const { width } = useWindowDimensions();
   return (
     <View style={[styles.filter, width < 360 && styles.filterNarrow]}>
       <Text style={[type.small, styles.filterLabel]} numberOfLines={1}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.textFaint }} thumbColor={colors.surface} accessibilityLabel={label} />
+      <AppSwitch value={value} onValueChange={onChange} accessibilityLabel={label} />
+    </View>
+  );
+}
+
+function MapControl(props: React.ComponentProps<typeof IconButton>) {
+  return (
+    <View style={styles.mapBtn}>
+      <IconButton {...props} glass={false} color="#1C2420" />
     </View>
   );
 }
 
 function LocationGate({ permission, note, busy, onEnable }: { permission: string; note: string | null; busy: boolean; onEnable: () => void }) {
   const { colors, type } = useTheme();
+  const insets = useSafeAreaInsets();
+  const asked = useRef(false);
   const denied = permission === 'denied';
+  const waitingForFix = permission === 'granted';
+  useEffect(() => {
+    if (asked.current || permission !== 'unknown') return;
+    asked.current = true;
+    onEnable();
+  }, [permission, onEnable]);
   return (
-    <View style={[styles.scrim, { backgroundColor: colors.bg }]} accessibilityViewIsModal>
+    <View style={[styles.scrim, { backgroundColor: colors.bg, paddingBottom: tabBarOffset(insets.bottom) + 16 }]} accessibilityViewIsModal>
       <View style={[styles.onboard, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Critter hue={28} size={84} mood="sleepy" />
         <Text style={[type.title, { textAlign: 'center' }]}>{denied ? 'Location is off' : 'Thaw needs your location'}</Text>
         <Text style={[type.body, { textAlign: 'center' }]}>
-          {note ?? 'Real quests are built from public places near you. Location stays on this phone and is never shared with other players.'}
+          {waitingForFix
+            ? 'The Simulator has no position yet. Choose Features → Location, then tap Enable location.'
+            : (note ?? 'Real quests are built from public places near you. Location stays on this phone and is never shared with other players.')}
         </Text>
-        <Button label={denied ? 'Try location again' : 'Enable location'} icon="crosshairs-gps" onPress={onEnable} loading={busy} />
+        <Button
+          label={denied ? 'Open Settings' : 'Enable location'}
+          icon="crosshairs-gps"
+          onPress={() => {
+            if (denied) void Linking.openSettings();
+            else onEnable();
+          }}
+          loading={busy}
+        />
       </View>
     </View>
   );
@@ -328,6 +348,21 @@ const styles = StyleSheet.create({
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   locChip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 12, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
   controls: { position: 'absolute', gap: 8, zIndex: 2, elevation: 4 },
+  mapBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(28,36,32,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#1C2420',
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 6,
+  },
   attribution: { position: 'absolute', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden', maxWidth: '70%' },
   sheetWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3, elevation: 6 },
   previewPad: { paddingHorizontal: 16, paddingBottom: 12 },

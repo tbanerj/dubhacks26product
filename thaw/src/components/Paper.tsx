@@ -1,9 +1,16 @@
 import React, { useEffect, useRef } from 'react';
-import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Switch, Text, View, type LayoutChangeEvent, type StyleProp, type SwitchProps, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/useTheme';
 import { motion, stopAndTiming } from '../theme/motion';
 import type { IconName } from '../theme/palette';
+
+/** Switch whose off track and thumb stay readable on light and dark surfaces. */
+export function AppSwitch(props: SwitchProps) {
+  const { scheme, colors } = useTheme();
+  const off = scheme === 'dark' ? '#8E9890' : '#B7BDB4';
+  return <Switch {...props} trackColor={{ false: off, true: colors.primary }} thumbColor="#FFFFFF" ios_backgroundColor={off} />;
+}
 
 export function Card({ children, style, tint }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; tint?: string }) {
   const { colors, radii, shadow } = useTheme();

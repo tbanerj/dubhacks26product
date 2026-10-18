@@ -15,6 +15,7 @@ import { sendInviteViaRelay } from '../services/photon';
 import { PARTY_ERROR_TEXT, type PartyErrorCode } from '../services/supabaseParty';
 import { config } from '../config/env';
 import { t } from '../i18n/strings';
+import { haptic } from '../utils/haptics';
 import type { NearbyPlayer } from '../types';
 
 const PROXIMITY_LABEL: Record<NearbyPlayer['proximity'], string> = {
@@ -67,12 +68,16 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
   const partyQuest = rawQuest && rawQuest.mode !== 'solo' ? rawQuest : undefined;
   const goalPlace = partyQuest ? world.entries.find((e) => e.quest.id === partyQuest.id)?.landmark.name : undefined;
   const spots = party ? party.capacity - party.members.length : 0;
+  const invitees = s.simulated ? s.nearby.filter((p) => !party?.members.some((m) => m.id === p.id)) : [];
   const canSetGoal = !party || party.isHost !== false;
   const unread = unreadChatCount(s.chat, s.lastChatReadAt, s.selfId);
   const lastMessage = [...s.chat].reverse().find((m) => !m.system);
   const groupQuests = world.entries.filter((e) => e.quest.mode !== 'solo' && e.status !== 'completed');
 
   const errorText = s.partyError ? (PARTY_ERROR_TEXT[s.partyError as PartyErrorCode] ?? PARTY_ERROR_TEXT.unknown) : null;
+  useEffect(() => {
+    if (errorText) console.warn('party', errorText);
+  }, [errorText]);
 
   const share = async () => {
     const message = s.simulated
@@ -87,6 +92,15 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     } catch {
       setShareNote('Sharing isn’t available on this device.');
     }
+  };
+
+  const inviteSpot = (index: number) => {
+    const person = invitees[index];
+    if (person) {
+      a.invitePlayer(person.id);
+      return;
+    }
+    void share();
   };
 
   const confirmLeave = () => {
@@ -151,7 +165,6 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               <Button label="Join party" onPress={() => void join()} loading={joining} disabled={code.trim().length < 6} />
             </Card>
           )}
-          {errorText ? <Notice tone="warn" text={errorText} /> : null}
           {s.simulated && <Text style={type.heading}>{t('party.nearby')}</Text>}
           {!s.simulated ? null : s.nearby.length === 0 ? (
             <EmptyState icon="account-search-outline" title="Nobody around right now." />
@@ -219,14 +232,27 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
                   {m.isDemo ? <Text style={type.tiny}>Demo</Text> : null}
                 </View>
               ))}
-              {Array.from({ length: spots }, (_, i) => (
-                <View key={`empty-${i}`} style={styles.member}>
-                  <View style={[styles.memberAvatar, { borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed' }]}>
-                    <MaterialCommunityIcons name="plus" size={18} color={colors.textFaint} />
-                  </View>
-                  <Text style={[type.tiny, { color: colors.textFaint }]}>Open</Text>
-                </View>
-              ))}
+              {Array.from({ length: spots }, (_, i) => {
+                const person = invitees[i];
+                const label = person ? `Invite ${person.name}` : 'Invite a friend';
+                return (
+                  <Pressable
+                    key={person?.id ?? `empty-${i}`}
+                    onPress={() => {
+                      haptic.tap();
+                      inviteSpot(i);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={person?.isDemo ? `${label}, demo` : label}
+                    style={({ pressed }) => [styles.member, pressed && { opacity: 0.72 }]}
+                  >
+                    <View style={[styles.memberAvatar, { borderColor: colors.border, borderWidth: StyleSheet.hairlineWidth, borderStyle: 'dashed' }]}>
+                      <MaterialCommunityIcons name="plus" size={18} color={colors.textFaint} />
+                    </View>
+                    <Text style={[type.tiny, { color: colors.textFaint }]}>Open</Text>
+                  </Pressable>
+                );
+              })}
             </View>
             <Button label={me?.ready ? t('party.notReady') : t('party.ready')} variant={me?.ready ? 'secondary' : 'primary'} onPress={() => a.setReady(!me?.ready)} />
           </Card>

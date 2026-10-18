@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { RootScreenProps } from '../navigation/types';
@@ -29,8 +29,12 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
     const res = await enableGps();
     setBusy(false);
     if (res.ok) navigation.goBack();
-    else setError(`${res.reason ?? 'Location unavailable.'} Pick a city below instead.`);
+    else setError(res.reason ?? 'Location unavailable.');
   };
+
+  useEffect(() => {
+    if (error) console.warn('location', error);
+  }, [error]);
 
   return (
     <ScreenShell title="Where to explore?" subtitle="Your GPS, or a city to stand in. Quests still come from the live map." back>
@@ -39,7 +43,6 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
         <Text style={type.small}>Thaw finds public parks, libraries, squares and art near you via OpenStreetMap. Approximate location, only while the app is open.</Text>
         <Button label={mode === 'gps' ? 'Using my location' : 'Use my location'} onPress={() => void gps()} loading={busy} />
         {permission === 'denied' && <Notice tone="warn" text="Location permission is off. You can enable it in your device settings, or pick a city below." />}
-        {error && <Notice tone="warn" text={error} />}
       </Card>
 
       <Text style={type.heading}>Cities</Text>

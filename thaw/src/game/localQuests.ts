@@ -402,6 +402,11 @@ const DEMO_QUESTS: Array<{ title: string; description: string; instructions: str
   },
 ];
 
+/** Walkthrough quests. Their titles end with " (demo)" so the map can finish them without a GPS check-in. */
+export function isExampleQuest(quest: { title: string }): boolean {
+  return quest.title.endsWith(' (demo)');
+}
+
 /** Three short solo quests for a walkthrough. Titles end with " (demo)". */
 export function demoQuestsForLandmark(landmark: Landmark): Quest[] {
   const byId = new Map([[landmark.id, landmark]]);

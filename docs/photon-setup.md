@@ -41,7 +41,7 @@ Apply this on the Supabase project before expecting app XP from a text quest:
 
 ## App
 
-In `thaw/.env`, set `EXPO_PUBLIC_PHOTON_API_URL` to the Photon API, for example `http://192.168.1.20:3001`. Restart Expo. Settings → Play by text uses the signed-in session. It does not show a success state until the server answers.
+In `thaw/.env`, set `EXPO_PUBLIC_PHOTON_API_URL` to the Photon API, for example `http://192.168.1.20:3001`. Restart Expo with `npx expo start -c`. `PlayByTextScreen` uses the signed-in session. Settings and You do not open that screen. It does not show a success state until the server answers.
 
 ## Troubleshooting
 

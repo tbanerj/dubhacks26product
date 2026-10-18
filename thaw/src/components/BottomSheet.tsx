@@ -82,7 +82,7 @@ export function BottomSheet({
         <View style={[styles.handle, { backgroundColor: colors.border }]} />
         {peek}
       </View>
-      <View style={styles.body} pointerEvents={open ? 'auto' : 'none'}>
+      <View style={styles.body} pointerEvents="auto">
         {children}
       </View>
     </Animated.View>

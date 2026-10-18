@@ -33,7 +33,7 @@ import { DEMO_REGIONS, GENERIC_REGION_ID, nearestRegion, regionById, sampleSpots
 import { localDayKey, shiftDayKey } from '../game/dates';
 import { applyCompletion, levelForXp } from '../game/progression';
 import { CHECK_IN_RADIUS_M, distanceMeters, isValidCoordinate, offsetMeters } from '../game/geo';
-import { generateLocalQuests, withDemoQuests } from '../game/localQuests';
+import { generateLocalQuests, isExampleQuest, withDemoQuests } from '../game/localQuests';
 import type { ActiveQuest } from '../game/questStatus';
 import { discoverPlaces } from '../services/places';
 import { generateQuests } from '../services/gemini';
@@ -568,7 +568,8 @@ export const useGameStore = create<GameState>()(
 
         simulateWalkTo: (landmarkId) => {
           const s = get();
-          if (!s.settings.demoMode) return;
+          const active = s.activeQuest ? s.quests.find((q) => q.id === s.activeQuest?.questId) : undefined;
+          if (!s.settings.demoMode && !(active && isExampleQuest(active))) return;
           const lm = s.landmarks.find((l) => l.id === landmarkId);
           if (lm) set({ simulatedPosition: offsetMeters(lm.coordinate, -25, 10) });
         },
@@ -580,7 +581,11 @@ export const useGameStore = create<GameState>()(
           const active = s.activeQuest;
           const quest = active ? s.quests.find((q) => q.id === active.questId) : undefined;
           const lm = quest ? s.landmarks.find((l) => l.id === quest.landmarkId) : undefined;
-          if (!active || !lm) return { ok: false, distanceM: null };
+          if (!active || !lm || !quest) return { ok: false, distanceM: null };
+          if (isExampleQuest(quest)) {
+            set({ activeQuest: { ...active, checkedIn: true } });
+            return { ok: true, distanceM: 0 };
+          }
           // Browsing another city moves the map, but a live reward still requires being there.
           const pos = s.settings.demoMode ? playerPosition(s) : s.gpsPosition ? { coordinate: s.gpsPosition, kind: 'gps' as const } : { coordinate: { latitude: 0, longitude: 0 }, kind: 'none' as const };
           if (pos.kind === 'none') return { ok: false, distanceM: null };
@@ -592,12 +597,12 @@ export const useGameStore = create<GameState>()(
 
         completeActiveQuest: (verification) => {
           const s = get();
-          if (!s.settings.demoMode) return { ok: false, reason: 'not-demo' };
           const active = s.activeQuest;
           if (!active) return { ok: false, reason: 'no-active-quest' };
           if (!verification.accepted) return { ok: false, reason: 'not-accepted' };
           const quest = s.quests.find((q) => q.id === active.questId);
           if (!quest) return { ok: false, reason: 'no-active-quest' };
+          if (!s.settings.demoMode && !isExampleQuest(quest)) return { ok: false, reason: 'not-demo' };
           const lm = s.landmarks.find((l) => l.id === quest.landmarkId);
           const partySize = active.soloVersion ? 1 : partySizeOf(s.party);
           const outcome = applyCompletion(s.progress, { quest, landmarkName: lm?.name ?? 'Unknown place', partySize });

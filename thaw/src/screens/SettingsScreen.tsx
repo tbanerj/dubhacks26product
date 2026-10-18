@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { RootScreenProps } from '../navigation/types';
 import { useGameStore, type AppearancePreference } from '../store/useGameStore';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, Chip, SectionTitle, SettingsRow } from '../components/Paper';
+import { AppSwitch, Card, Chip, SectionTitle, SettingsRow } from '../components/Paper';
 import { Button } from '../components/Button';
 import { useTheme } from '../theme/useTheme';
 import { integrationStatus } from '../config/env';
@@ -51,11 +51,9 @@ export function SettingsScreen({ navigation }: RootScreenProps<'Settings'>) {
           label="Units"
           value={settings.units === 'imperial' ? 'Imperial' : 'Metric'}
           control={
-            <Switch
+            <AppSwitch
               value={settings.units === 'imperial'}
               onValueChange={(v) => updateSettings({ units: v ? 'imperial' : 'metric' })}
-              trackColor={{ true: colors.primary, false: colors.border }}
-              thumbColor={colors.surface}
               accessibilityLabel="Imperial units"
             />
           }
@@ -64,13 +62,13 @@ export function SettingsScreen({ navigation }: RootScreenProps<'Settings'>) {
           icon="walk"
           label="Prefer solo"
           hint="New quests default to solo"
-          control={<Switch value={settings.preferSolo} onValueChange={(v) => updateSettings({ preferSolo: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Prefer solo quests" />}
+          control={<AppSwitch value={settings.preferSolo} onValueChange={(v) => updateSettings({ preferSolo: v })} accessibilityLabel="Prefer solo quests" />}
         />
         <SettingsRow
           icon="timer-outline"
           label="Shorter walks"
           hint="Suggest shorter, lower-mobility quests"
-          control={<Switch value={settings.mobilityFriendly} onValueChange={(v) => updateSettings({ mobilityFriendly: v })} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Shorter walks" />}
+          control={<AppSwitch value={settings.mobilityFriendly} onValueChange={(v) => updateSettings({ mobilityFriendly: v })} accessibilityLabel="Shorter walks" />}
         />
       </Card>
 
@@ -90,7 +88,7 @@ export function SettingsScreen({ navigation }: RootScreenProps<'Settings'>) {
               setDeleting(true);
               const res = await deleteAccount();
               setDeleting(false);
-              if (!res.ok) Alert.alert('Couldn’t delete account', res.error ?? 'Try again in a moment.');
+              if (!res.ok) console.warn('delete-account', res.error ?? 'Delete failed.');
             };
             if (Platform.OS === 'web') return void go();
             Alert.alert('Delete account?', 'This removes your explorer, XP, pins, and parties. It cannot be undone.', [
@@ -124,7 +122,7 @@ export function SettingsScreen({ navigation }: RootScreenProps<'Settings'>) {
           icon="flask-outline"
           label="Demo mode"
           hint="Stand in for GPS with Seattle. Quests, parties, photos, and your account stay real."
-          control={<Switch value={settings.demoMode} onValueChange={(v) => void setDemoMode(v)} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Demo mode" />}
+          control={<AppSwitch value={settings.demoMode} onValueChange={(v) => void setDemoMode(v)} accessibilityLabel="Demo mode" />}
         />
       </Card>
 

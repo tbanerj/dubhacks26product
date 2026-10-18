@@ -13,6 +13,7 @@ import { useTheme } from '../theme/useTheme';
 import { formatDistance } from '../utils/format';
 import { CHECK_IN_RADIUS_M, distanceMeters, walkingMinutes } from '../game/geo';
 import { t } from '../i18n/strings';
+import { isExampleQuest } from '../game/localQuests';
 
 export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>) {
   const world = useWorld();
@@ -35,6 +36,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   }
 
   const { quest, landmark, distanceM } = entry;
+  const example = isExampleQuest(quest);
   const shownDistance = !demoMode && gpsPosition ? distanceMeters(gpsPosition, landmark.coordinate) : distanceM;
   const inRange = shownDistance <= CHECK_IN_RADIUS_M;
   const checkedIn = active.checkedIn;
@@ -121,11 +123,15 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
         </View>
       </Card>
 
-      {!checkedIn && demoMode && (
+      {!checkedIn && (demoMode || example) && (
         <Button
-          label={t('active.simWalk')}
+          label={example ? 'Check in from here' : t('active.simWalk')}
           variant="secondary"
           onPress={() => {
+            if (example) {
+              checkIn();
+              return;
+            }
             simulateWalkTo(landmark.id);
             setCheckMsg('Simulated position moved next to the landmark. Now check in.');
           }}

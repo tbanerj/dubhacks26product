@@ -13,15 +13,17 @@ export function GlassSurface({
   children,
   style,
   variant = 'regular',
+  tintColor,
 }: {
   children?: React.ReactNode;
   style?: StyleProp<ViewStyle>;
   variant?: GlassVariant;
+  tintColor?: string;
 }) {
   const { colors, scheme, reduceTransparency, shadow } = useTheme();
   if (canUseLiquidGlass() && !reduceTransparency) {
     return (
-      <GlassView style={style} glassEffectStyle={variant} colorScheme={scheme} isInteractive={false}>
+      <GlassView style={style} glassEffectStyle={variant} colorScheme={scheme} tintColor={tintColor} isInteractive={false}>
         {children}
       </GlassView>
     );

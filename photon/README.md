@@ -16,7 +16,7 @@ This folder is the messaging service. The Expo app lives in `thaw/`. The phone c
 
 ## Setup
 
-Requirements: Bun 1.4 or newer. SQLite is built into Bun. No Postgres service is required.
+Requirements: Bun 1.4 or newer. SQLite is built into Bun. This process does not run Postgres. Linked rewards can call the cloud Supabase project when the service-role key is set. Dashboard steps are in [docs/photon-setup.md](../docs/photon-setup.md).
 
 ```sh
 cd photon
@@ -27,25 +27,33 @@ Copy `.env.example` to `.env` if you do not already have one. For live iMessage,
 
 | Variable | Where it lives | Purpose |
 | --- | --- | --- |
-| `PROJECT_ID`, `PROJECT_SECRET` | Server only | Stable Spectrum credentials. `SPECTRUM_PROJECT_ID` and `SPECTRUM_PROJECT_SECRET` are aliases. |
+| `PROJECT_ID`, `PROJECT_SECRET` | Server only | Stable Spectrum credentials. `SPECTRUM_PROJECT_ID` and `SPECTRUM_PROJECT_SECRET` are aliases and win when both are set. |
 | `THAW_TRANSPORT` | Server | `photon` or `demo`. Defaults to `photon` when a project id is set. |
-| `THAW_VERIFIER` | Server | `demo` only. `live` refuses to start. |
-| `THAW_DATABASE_PATH` | Server | SQLite file. Default `data/thaw.sqlite`. |
+| `THAW_VERIFIER` | Server | `demo` labels a simulated photo check. `live` starts only when `GEMINI_API_KEY` is set, and refuses to boot without it. |
+| `GEMINI_API_KEY`, `GEMINI_MODEL` | Server only | Live photo checks. Model default `gemini-3.5-flash-lite`. Never put this key in the Expo app or on Vercel. |
+| `THAW_DATABASE_PATH` | Server | SQLite file. Default `data/thaw.sqlite`. Gitignored under `data/`. |
 | `THAW_MEDIA_DIR` | Server | Private photo files. Default `data/media`. |
 | `PORT` | Server | Local API, default `3001`, bound to `THAW_API_HOST` (`127.0.0.1` by default). |
 | `THAW_SIGNUP_ALLOWED_ORIGINS` | Server | Exact `Origin` values for `POST /api/public/signup`, comma-separated. Unset allows only `http://localhost:5173` and `http://127.0.0.1:5173`. Setting it replaces those defaults, so keep the local origins in the list when you add `https://dubhacks26product.vercel.app`. |
-| `THAW_DEV_API` | Server | `1` enables the development linking header. Photon mode leaves this off unless you set it. |
-| `THAW_*` image and timezone settings | Server | Limits and the default timezone `America/Los_Angeles`. Thaw does not guess a timezone from a phone number. |
+| `THAW_DEV_API` | Server | `1` enables the development linking header. Unset is on for `demo` and off for `photon`. |
+| `THAW_DIAGNOSTICS` | Server | `1` enables `PING`. It does not award XP. |
+| `MESSAGING_ENABLED` | Server | `0` or `false` turns the text loop off. Otherwise on. |
+| `MESSAGING_PROACTIVE_ENABLED` | Server | `1` allows optional prompts. Default off. |
+| `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY` | Server only | Validate the app's Bearer token against Supabase Auth. |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server only | Copy a linked reward into Postgres. Without it, sync does not run. Never put this in Expo. |
+| `THAW_MAX_IMAGE_BYTES`, `THAW_MAX_IMAGE_PIXELS`, `THAW_MEDIA_RETENTION_HOURS`, `THAW_DEFAULT_TIMEZONE` | Server | Defaults: 10 MB, 20 million pixels, 24 hours, `America/Los_Angeles`. Thaw does not guess a timezone from a phone number. |
 
 Nothing from this service is safe to put in a public client bundle. The development header `x-thaw-dev-user` is not production login.
 
 ## Commands
 
 ```sh
+bun run messaging:doctor      # print which variable names are set; does not print values or award XP
 bun run messaging:seed        # create the local database
 bun run messaging:demo        # text as Ada or Ben, no credentials
 bun run messaging:dev         # photon if credentials exist, otherwise demo
 bun start                     # same as messaging:dev
+bun run dev                   # bun --watch src/index.ts
 bun run messaging:test        # unit tests
 bun run typecheck
 bun run messaging:reset-demo  # delete demo-scoped players only
@@ -110,17 +118,18 @@ XP and collectibles are written in one database transaction. Each quest pays onc
 
 ## App linking
 
-The Expo app screen is Settings → Play by text. It sends the signed-in Supabase access token to this API. With `THAW_DEV_API=1`, local tests can still send `x-thaw-dev-user`. That header is not production login.
+`PlayByTextScreen` in the Expo app is registered, and nothing in Settings or You navigates to it. When that screen runs, it sends the signed-in Supabase access token to this API. Set `EXPO_PUBLIC_PHOTON_API_URL` in `thaw/.env` to a host the phone can reach. With `THAW_DEV_API=1`, local tests can still send `x-thaw-dev-user`. That header is not production login.
 
 - `GET /health`, `GET /ready`, and `POST /api/public/signup` (no auth)
 - `GET /api/me/messaging` and `GET /api/me/progress`
 - `POST /api/me/messaging/link-token` (and `/link`) issues an 8-character code for 10 minutes
+- `GET /api/me/messaging/link-status`
 - text `LINK` and that code
 - `POST /api/me/messaging/link-confirm`
 - `PATCH /api/me/messaging/preferences`
 - `DELETE /api/me/messaging/link` drops future app access and does not erase earned history
 
-A linked reward is copied into Supabase only when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set on this server. Apply `supabase/migrations/20261018010000_messaging_rewards.sql` first. Five failed code attempts lock that chat for the code window. Codes are stored as hashes.
+Bearer auth checks the access token with `SUPABASE_URL` and `SUPABASE_PUBLISHABLE_KEY`. A linked reward is copied into Supabase only when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are both set. Apply `supabase/migrations/20261018010000_messaging_rewards.sql` first. That RPC is service-role only. Five failed code attempts lock that chat for the code window. Codes are stored as hashes.
 
 ## Logs and shutdown
 

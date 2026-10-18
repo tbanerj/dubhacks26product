@@ -26,7 +26,7 @@ const TAP_SLOP = 10;
 /** Glass tab bar. The route index is the only selected-tab state. */
 export function TabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { colors, type, reduceMotion } = useTheme();
+  const { colors, scheme, type, reduceMotion } = useTheme();
   const unread = useGameStore((s) => unreadChatCount(s.chat, s.lastChatReadAt, s.player.id));
   const unseen = useGameStore((s) => unseenCollectibleCount(s.progress.collectibles, s.seenCollectibleIds));
   const [candidate, setCandidate] = useState<number | null>(null);
@@ -179,10 +179,12 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
   };
 
   const emphasized = candidate ?? state.index;
+  const bottomInset = Math.max(insets.bottom, 8);
+  const glassTint = scheme === 'dark' ? 'rgba(18,24,21,0.55)' : 'rgba(248,248,243,0.72)';
 
   return (
-    <View style={[styles.outer, { left: Math.max(12, insets.left), right: Math.max(12, insets.right), paddingBottom: Math.max(insets.bottom, 8) }]}>
-      <GlassSurface style={styles.bar} variant="regular">
+    <View style={[styles.outer, { left: Math.max(12, insets.left), right: Math.max(12, insets.right) }]}>
+      <GlassSurface style={styles.bar} variant="regular" tintColor={glassTint}>
         <View
           ref={rowRef}
           style={styles.row}
@@ -194,7 +196,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
           {pillWidth > 0 && (
             <Animated.View
               pointerEvents="none"
-              style={[styles.indicator, { width: pillWidth, backgroundColor: colors.sageSoft, transform: [{ translateX: indicatorX }] }]}
+              style={[styles.indicator, { width: pillWidth, backgroundColor: colors.sageSoft, opacity: 0.45, transform: [{ translateX: indicatorX }] }]}
             />
           )}
           {state.routes.map((route, index) => {
@@ -238,6 +240,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
             );
           })}
         </View>
+        <View style={{ height: bottomInset }} />
       </GlassSurface>
     </View>
   );
@@ -246,7 +249,7 @@ export function TabBar({ state, navigation }: BottomTabBarProps) {
 const styles = StyleSheet.create({
   outer: { position: 'absolute', bottom: 0, zIndex: 20, elevation: 16 },
   tabLabel: { alignSelf: 'stretch', textAlign: 'center' },
-  bar: { borderRadius: 28 },
+  bar: { borderRadius: 28, overflow: 'hidden' },
   row: { flexDirection: 'row', overflow: 'hidden', borderRadius: 28 },
   indicator: { position: 'absolute', left: 0, top: 0, bottom: 0 },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 56, gap: 2 },

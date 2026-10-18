@@ -1,11 +1,11 @@
-import React, { useCallback, useState } from 'react';
-import { Share, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { Share, StyleSheet, Text, View } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as Localization from 'expo-localization';
 import type { RootScreenProps } from '../navigation/types';
 import { ScreenShell } from '../components/ScreenShell';
 import { Button } from '../components/Button';
-import { Card, Notice, SettingsRow } from '../components/Paper';
+import { AppSwitch, Card, SettingsRow } from '../components/Paper';
 import { useTheme } from '../theme/useTheme';
 import { photonApiConfigured, messagingRequest, type MessagingView } from '../services/messagingApi';
 
@@ -57,12 +57,13 @@ export function PlayByTextScreen(_props: RootScreenProps<'PlayByText'>) {
     }
   };
 
+  useEffect(() => {
+    if (error) console.warn('play-by-text', error);
+  }, [error]);
+
   if (!photonApiConfigured()) {
-    return (
-      <ScreenShell title="Play by text" back>
-        <Notice tone="warn" text="Set EXPO_PUBLIC_PHOTON_API_URL to the Photon service, then restart Expo. The Photon secret stays on that service." />
-      </ScreenShell>
-    );
+    console.warn('play-by-text', 'Photon API URL is not configured.');
+    return <ScreenShell title="Play by text" back>{null}</ScreenShell>;
   }
 
   const prefs = view?.preferences;
@@ -73,7 +74,6 @@ export function PlayByTextScreen(_props: RootScreenProps<'PlayByText'>) {
       <Text style={type.body}>
         Text Thaw from the iMessage identity registered on the Photon project. The number can be different for each person. Thaw does not use one public number.
       </Text>
-      {error ? <Notice tone="warn" text={error} /> : null}
       <Card style={{ gap: 8 }}>
         <Text style={type.bodyStrong}>{view?.linked ? 'Linked' : 'Not linked'}</Text>
         <Text style={type.small}>{view?.maskedSender ? `Messages identity ${view.maskedSender}` : 'No Messages identity confirmed yet.'}</Text>
@@ -123,7 +123,7 @@ export function PlayByTextScreen(_props: RootScreenProps<'PlayByText'>) {
               label="Adventure prompts"
               hint={prefs.nextDueAt ? `Next eligible ${prefs.nextDueAt}` : 'Off until you enable them'}
               control={
-                <Switch
+                <AppSwitch
                   value={prefs.remindersEnabled}
                   disabled={busy}
                   onValueChange={(enabled) =>
@@ -134,8 +134,6 @@ export function PlayByTextScreen(_props: RootScreenProps<'PlayByText'>) {
                       });
                     })
                   }
-                  trackColor={{ true: colors.primary, false: colors.border }}
-                  thumbColor={colors.surface}
                 />
               }
             />

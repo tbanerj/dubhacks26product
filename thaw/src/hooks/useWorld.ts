@@ -48,6 +48,7 @@ export function useWorld() {
       const status = questStatus(q, s.progress, s.activeQuest, s.seenQuestIds);
       // Discovery is distance-based; the active quest always stays visible.
       if (d > DISCOVERY_RADIUS_M && status !== 'active') continue;
+      if (status !== 'active' && !questFitsSettings(q, s.settings)) continue;
       entries.push({ quest: q, landmark: lm, status, distanceM: d });
     }
     entries.sort((a, b) => Number(a.status === 'completed') - Number(b.status === 'completed') || a.distanceM - b.distanceM);
@@ -59,5 +60,11 @@ export function useWorld() {
     }));
     const active = s.activeQuest ? entries.find((e) => e.quest.id === s.activeQuest?.questId) ?? null : null;
     return { position, entries, hubs, active, lmById };
-  }, [position, s.landmarks, s.quests, s.progress, s.activeQuest, s.seenQuestIds]);
+  }, [position, s.landmarks, s.quests, s.progress, s.activeQuest, s.seenQuestIds, s.settings.preferSolo, s.settings.mobilityFriendly]);
+}
+
+function questFitsSettings(quest: { mode: string; durationMin: number; difficulty: string }, settings: { preferSolo: boolean; mobilityFriendly: boolean }): boolean {
+  if (settings.preferSolo && quest.mode !== 'solo') return false;
+  if (settings.mobilityFriendly && (quest.durationMin > 25 || quest.difficulty === 'hard')) return false;
+  return true;
 }

@@ -216,6 +216,8 @@ export interface VerifyRequest {
 export interface VerifyOptions {
   /** Demo only: lets the judge rehearse the rejection + retry path. */
   demoOutcome?: 'accept' | 'reject';
+  /** Example quests skip the live photo check so a walkthrough can finish on the spot. */
+  example?: boolean;
   timeoutMs?: number;
 }
 
@@ -343,7 +345,7 @@ async function verifyDemo(req: VerifyRequest, outcome: 'accept' | 'reject'): Pro
 }
 
 export async function verifyEvidence(req: VerifyRequest, opts: VerifyOptions = {}): Promise<VerifyResponse> {
-  if (!isLiveVerificationConfigured()) return verifyDemo(req, opts.demoOutcome ?? 'accept');
+  if (opts.example || !isLiveVerificationConfigured()) return verifyDemo(req, opts.demoOutcome ?? 'accept');
   const live = await verifyLive(req, opts.timeoutMs ?? 30_000);
   if (live.ok) return live;
   if (!req.image.uri) return live;
