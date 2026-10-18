@@ -29,20 +29,20 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
     const res = await enableGps();
     setBusy(false);
     if (res.ok) navigation.goBack();
-    else setError(`${res.reason ?? 'Location unavailable.'} Pick a sample city below instead.`);
+    else setError(`${res.reason ?? 'Location unavailable.'} Pick a city below instead.`);
   };
 
   return (
-    <ScreenShell title="Where to explore?" subtitle="Real location, or a sample city" back>
+    <ScreenShell title="Where to explore?" subtitle="Your GPS, or a city to stand in. Quests still come from the live map." back>
       <Card style={{ gap: 8 }}>
         <Text style={type.heading}>Play where you are</Text>
         <Text style={type.small}>Thaw finds public parks, libraries, squares and art near you via OpenStreetMap. Approximate location, only while the app is open.</Text>
         <Button label={mode === 'gps' ? 'Using my location' : 'Use my location'} onPress={() => void gps()} loading={busy} />
-        {permission === 'denied' && <Notice tone="warn" text="Location permission is off. You can enable it in your device settings, or keep playing in a sample city." />}
+        {permission === 'denied' && <Notice tone="warn" text="Location permission is off. You can enable it in your device settings, or pick a city below." />}
         {error && <Notice tone="warn" text={error} />}
       </Card>
 
-      <Text style={type.heading}>Sample cities</Text>
+      <Text style={type.heading}>Cities</Text>
       <View style={{ gap: 8 }}>
         {DEMO_REGIONS.map((r) => {
           const on = mode === 'region' && regionId === r.id;
@@ -53,12 +53,12 @@ export function RegionPickerScreen({ navigation }: RootScreenProps<'RegionPicker
               style={({ pressed }) => [styles.region, { borderColor: on ? colors.primary : colors.border, backgroundColor: on ? colors.sageSoft : colors.surface, borderRadius: radii.lg, opacity: pressed ? 0.85 : 1 }]}
               accessibilityRole="button"
               accessibilityState={{ selected: on }}
-              accessibilityLabel={`${r.name}, ${r.country}${on ? ', selected' : ''}. Sample city.`}
+              accessibilityLabel={`${r.name}, ${r.country}${on ? ', selected' : ''}`}
             >
               <Text style={styles.emoji}>{r.emoji}</Text>
               <View style={{ flex: 1 }}>
                 <Text style={type.bodyStrong}>{r.name}</Text>
-                <Text style={type.small}>{r.country} · Sample</Text>
+                <Text style={type.small}>{r.country}</Text>
               </View>
               {on ? <MaterialCommunityIcons name="check" size={20} color={colors.primary} /> : null}
             </Pressable>

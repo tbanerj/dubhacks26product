@@ -59,6 +59,8 @@ export interface PartyService {
 
 let idCounter = 0;
 const nid = (p: string) => `${p}-${Date.now().toString(36)}-${(idCounter++).toString(36)}`;
+const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const partyCode = () => Array.from({ length: 6 }, () => CODE_ALPHABET[Math.floor(Math.random() * CODE_ALPHABET.length)]).join('');
 
 export class SimulatedPartyService implements PartyService {
   readonly isSimulated = true;
@@ -152,7 +154,7 @@ export class SimulatedPartyService implements PartyService {
   createParty(self: SelfInfo, questId: string | null) {
     this.self = self;
     this.set({
-      party: { id: nid('party'), name: `${self.name}’s party`, members: [this.selfMember(self)], questId, capacity: PARTY_CAPACITY },
+      party: { id: nid('party'), name: `${self.name}’s party`, members: [this.selfMember(self)], questId, capacity: PARTY_CAPACITY, code: partyCode() },
       messages: [],
     });
     this.system('Party created. Invite demo explorers, or share an invite with a friend.');
@@ -169,6 +171,7 @@ export class SimulatedPartyService implements PartyService {
         members: [{ ...this.demoMember(host), ready: true }, this.selfMember(self)],
         questId: this.state.party?.questId ?? null,
         capacity: PARTY_CAPACITY,
+        code: partyCode(),
       },
       messages: [],
     });

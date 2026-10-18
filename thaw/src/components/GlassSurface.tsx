@@ -1,25 +1,27 @@
 import React from 'react';
 import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
-import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useTheme } from '../theme/useTheme';
 
+export type GlassVariant = 'regular' | 'clear';
+
 /**
- * Native Liquid Glass on iOS 26+ when the API is available and the user has not
- * asked for reduced transparency. Every other case gets an opaque surface —
- * not the library's plain View.
+ * Native Liquid Glass for controls. Content cards should use a solid surface.
+ * The glass is left untinted so it samples what is behind it. Opacity is not animated.
  */
-export function GlassSurface({ children, style, tint }: { children?: React.ReactNode; style?: StyleProp<ViewStyle>; tint?: string }) {
+export function GlassSurface({
+  children,
+  style,
+  variant = 'regular',
+}: {
+  children?: React.ReactNode;
+  style?: StyleProp<ViewStyle>;
+  variant?: GlassVariant;
+}) {
   const { colors, scheme, reduceTransparency, shadow } = useTheme();
-  const native = canUseLiquidGlass() && !reduceTransparency;
-  if (native) {
+  if (canUseLiquidGlass() && !reduceTransparency) {
     return (
-      <GlassView
-        style={[styles.clip, style]}
-        glassEffectStyle="regular"
-        tintColor={tint ?? (scheme === 'dark' ? '#1C2420' : '#F8F8F3')}
-        colorScheme={scheme}
-        isInteractive={false}
-      >
+      <GlassView style={style} glassEffectStyle={variant} colorScheme={scheme} isInteractive={false}>
         {children}
       </GlassView>
     );
@@ -30,13 +32,12 @@ export function GlassSurface({ children, style, tint }: { children?: React.React
 export function canUseLiquidGlass(): boolean {
   if (Platform.OS !== 'ios') return false;
   try {
-    return isLiquidGlassAvailable();
+    return isLiquidGlassAvailable() && isGlassEffectAPIAvailable();
   } catch {
     return false;
   }
 }
 
 const styles = StyleSheet.create({
-  clip: { overflow: 'hidden' },
   fallback: { borderWidth: StyleSheet.hairlineWidth },
 });

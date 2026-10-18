@@ -15,6 +15,7 @@ import { RewardScreen } from '../screens/RewardScreen';
 import { RegionPickerScreen } from '../screens/RegionPickerScreen';
 import { LeaderboardScreen } from '../screens/LeaderboardScreen';
 import { SettingsScreen } from '../screens/SettingsScreen';
+import { PlayByTextScreen } from '../screens/PlayByTextScreen';
 import { EditAvatarScreen } from '../screens/EditAvatarScreen';
 import { PartyChatScreen } from '../screens/PartyChatScreen';
 import { AuthScreen } from '../screens/AuthScreen';
@@ -31,7 +32,10 @@ const Tab = createBottomTabNavigator<TabParamList>();
 function Tabs() {
   const { colors } = useTheme();
   return (
-    <Tab.Navigator tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg } }}>
+    <Tab.Navigator
+      tabBar={(props) => <TabBar {...props} />}
+      screenOptions={{ headerShown: false, sceneStyle: { backgroundColor: colors.bg }, freezeOnBlur: true }}
+    >
       <Tab.Screen name="Explore" component={ExploreScreen} />
       <Tab.Screen name="Party" component={PartyScreen} />
       <Tab.Screen name="Collection" component={CollectionScreen} />
@@ -93,6 +97,7 @@ export function RootNavigator() {
           <Stack.Screen name="RegionPicker" component={RegionPickerScreen} options={{ animation: 'slide_from_bottom' }} />
           <Stack.Screen name="Leaderboard" component={LeaderboardScreen} />
           <Stack.Screen name="Settings" component={SettingsScreen} />
+          <Stack.Screen name="PlayByText" component={PlayByTextScreen} />
           <Stack.Screen name="EditAvatar" component={EditAvatarScreen} />
           <Stack.Screen name="PartyChat" component={PartyChatScreen} />
           <Stack.Screen name="Auth" component={AuthScreen} options={{ animation: 'slide_from_bottom' }} />

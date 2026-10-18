@@ -2,7 +2,7 @@
 
 Text Thaw and it will help you pick a small public adventure, send one photo, and earn XP and a collectible. The tagline is "The world gets warmer when you show up."
 
-This folder is the messaging service. There is no Expo app in the repository. The phone connection is stable Spectrum Cloud iMessage (`spectrum-ts` 12.11.0), not Photon Engine and not the Photon beta API.
+This folder is the messaging service. The Expo app lives in `thaw/`. The phone connection is stable Spectrum Cloud iMessage (`spectrum-ts` 12.11.0), not Photon Engine and not the Photon beta API.
 
 - Docs: https://photon.codes/docs/spectrum-ts/getting-started
 - iMessage provider: https://photon.codes/docs/spectrum-ts/providers/imessage
@@ -81,20 +81,21 @@ XP and collectibles are written in one database transaction. Each quest pays onc
 
 `REMIND 15` stores one reminder for the active quest. A newer request replaces it. Completion, `CANCEL`, `STOP`, or a reminder more than 6 hours late cancels it. The process checks the database every 15 seconds, including after a restart.
 
-`STOP` opts the player out and suppresses queued sends. `START` resumes. Earned progress stays.
+`STOP` opts the player out and suppresses queued sends, including reminders. `START` lets the player continue, and it does not turn reminders back on. `RESUME` clears a temporary pause only. Earned progress stays.
 
 ## App linking
 
-There is no mobile app in this repo. With `THAW_DEV_API=1` these local routes use the header `x-thaw-dev-user: <name>`:
+The Expo app screen is Settings → Play by text. It sends the signed-in Supabase access token to this API. With `THAW_DEV_API=1`, local tests can still send `x-thaw-dev-user`. That header is not production login.
 
-- `GET /health` and `GET /ready` (no header)
-- `GET /api/me/progress`
-- `POST /api/me/messaging/link` issues an 8-character code for 10 minutes
+- `GET /health` and `GET /ready` (no auth)
+- `GET /api/me/messaging` and `GET /api/me/progress`
+- `POST /api/me/messaging/link-token` (and `/link`) issues an 8-character code for 10 minutes
 - text `LINK` and that code
 - `POST /api/me/messaging/link-confirm`
+- `PATCH /api/me/messaging/preferences`
 - `DELETE /api/me/messaging/link` drops future app access and does not erase earned history
 
-Five failed code attempts lock that chat for the code window. Codes are stored as hashes.
+A linked reward is copied into Supabase only when `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are set on this server. Apply `supabase/migrations/20261018010000_messaging_rewards.sql` first. Five failed code attempts lock that chat for the code window. Codes are stored as hashes.
 
 ## Logs and shutdown
 
@@ -106,10 +107,11 @@ The SQLite file and `data/media` must live on a disk that survives restarts. A c
 
 ## Not wired
 
-- A live image model in this service. `THAW_VERIFIER=live` exits with an error instead of pretending a photo passed. The Expo app checks photos with Gemini.
-- Gemini quest generation. Three local templates are used for every place.
+- Gemini quest writing in this service. Three local templates are used for every place. The Expo app still writes map quests with Gemini.
 - Outgoing collectible images.
-- An Expo screen. Linking is the HTTP stand-in above.
+- Group chats, voice, and SMS.
+
+Live photo checks run when `THAW_VERIFIER=live` and `GEMINI_API_KEY` is set on this server. Without that key the process refuses to start, instead of treating a photo as a pass. Demo mode still says `Demo verification`.
 
 ## Tests
 

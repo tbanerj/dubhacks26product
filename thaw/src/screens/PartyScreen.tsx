@@ -49,6 +49,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       leaveParty: st.leaveParty,
       setReady: st.setReady,
       joinPartyByCode: st.joinPartyByCode,
+      setPartyQuest: st.setPartyQuest,
     })),
   );
   const [shareNote, setShareNote] = useState<string | null>(null);
@@ -64,7 +65,9 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
   const me = party?.members.find((m) => m.isSelf);
   const rawQuest = party?.questId ? s.quests.find((q) => q.id === party.questId) : undefined;
   const partyQuest = rawQuest && rawQuest.mode !== 'solo' ? rawQuest : undefined;
+  const goalPlace = partyQuest ? world.entries.find((e) => e.quest.id === partyQuest.id)?.landmark.name : undefined;
   const spots = party ? party.capacity - party.members.length : 0;
+  const canSetGoal = !party || party.isHost !== false;
   const unread = unreadChatCount(s.chat, s.lastChatReadAt, s.selfId);
   const lastMessage = [...s.chat].reverse().find((m) => !m.system);
   const groupQuests = world.entries.filter((e) => e.quest.mode !== 'solo' && e.status !== 'completed');
@@ -173,14 +176,17 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
         </>
       ) : picking ? (
         <>
-          <Text style={type.heading}>Party quests</Text>
+          <Text style={type.heading}>Choose a shared goal</Text>
           {groupQuests.length === 0 ? (
             <EmptyState icon="flag-outline" title="No group quests nearby." body="Solo quests stay on the map. Try another area, or turn off Prefer solo in Settings." />
           ) : (
             groupQuests.map((e) => (
               <Pressable
                 key={e.quest.id}
-                onPress={() => navigation.navigate('QuestDetail', { questId: e.quest.id })}
+                onPress={() => {
+                  a.setPartyQuest(e.quest.id, e.quest.title);
+                  setPicking(false);
+                }}
                 accessibilityRole="button"
                 accessibilityLabel={`${e.quest.title}, party quest`}
                 style={[styles.questPick, { borderColor: colors.border, backgroundColor: colors.surface }]}
@@ -226,26 +232,42 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
           </Card>
 
           <Card style={{ gap: 8 }}>
-            <Text style={type.tiny}>Group quest</Text>
+            <Text style={type.tiny}>SHARED GOAL</Text>
             {partyQuest ? (
               <>
                 <Text style={type.heading}>{partyQuest.title}</Text>
-                <Text style={type.small}>{partyQuest.mode === 'party' ? 'Party quest' : 'Group quest'} · {partyQuest.xp} XP</Text>
+                <Text style={type.small}>
+                  {goalPlace ? `${goalPlace} · ` : ''}
+                  {partyQuest.xp} XP · the whole party shares this goal
+                </Text>
                 <Button
                   label="Open quest"
                   variant="secondary"
                   onPress={() => (s.activeQuest?.questId === partyQuest.id ? navigation.navigate('ActiveQuest') : navigation.navigate('QuestDetail', { questId: partyQuest.id }))}
                 />
+                {canSetGoal ? <Button label="Change goal" variant="ghost" onPress={() => setPicking(true)} /> : <Text style={type.small}>The host chooses the shared goal.</Text>}
+              </>
+            ) : party.questTitle ? (
+              <>
+                <Text style={type.heading}>{party.questTitle}</Text>
+                <Text style={type.small}>The whole party shares this goal.</Text>
+                {canSetGoal ? <Button label="Change goal" variant="secondary" onPress={() => setPicking(true)} /> : <Text style={type.small}>The host chooses the shared goal.</Text>}
               </>
             ) : (
               <>
-                <Text style={type.body}>No group quest selected.</Text>
-                <Button label="Find a quest" onPress={() => setPicking(true)} />
+                <Text style={type.body}>{canSetGoal ? 'Pick one quest the whole party is working toward.' : 'The host hasn’t picked a shared goal yet.'}</Text>
+                {canSetGoal ? <Button label="Choose a shared goal" onPress={() => setPicking(true)} /> : null}
               </>
             )}
           </Card>
 
-          {!s.simulated && party.code ? <Notice icon="ticket-confirmation-outline" text={`Party code ${party.code}. Share it so friends can join.`} /> : null}
+          {party.code ? (
+            <View style={styles.codeBlock} accessibilityLabel={`Share code ${party.code}`}>
+              <Text style={type.tiny}>SHARE CODE</Text>
+              <Text style={[styles.code, { color: colors.text }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{party.code}</Text>
+              <Text style={[type.small, { textAlign: 'center' }]}>Friends enter this in Party to join.</Text>
+            </View>
+          ) : null}
           {s.simulated && spots > 0 ? (
             <>
               <Text style={type.heading}>Invite demo explorers</Text>
@@ -305,4 +327,6 @@ const styles = StyleSheet.create({
   chatPreview: { flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64, padding: 14, borderRadius: 20, borderWidth: StyleSheet.hairlineWidth },
   unread: { minWidth: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 6 },
   codeInput: { minHeight: 48, borderWidth: StyleSheet.hairlineWidth, borderRadius: 12, paddingHorizontal: 16, fontSize: 20, letterSpacing: 4 },
+  codeBlock: { alignItems: 'center', gap: 4, paddingVertical: 8 },
+  code: { width: '100%', textAlign: 'center', fontSize: 40, lineHeight: 48, fontWeight: '700', letterSpacing: 6 },
 });

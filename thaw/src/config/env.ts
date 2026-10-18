@@ -37,6 +37,7 @@ export const config = {
   },
   photon: {
     relayUrl: readKey(process.env.EXPO_PUBLIC_PHOTON_RELAY_URL),
+    apiUrl: readKey(process.env.EXPO_PUBLIC_PHOTON_API_URL),
   },
   supabase: {
     url: readSupabaseUrl(process.env.EXPO_PUBLIC_SUPABASE_URL),
@@ -57,7 +58,7 @@ export function isSupabaseConfigured(): boolean {
 export function integrationStatus(): Record<'gemini' | 'photon' | 'supabase', IntegrationStatus> {
   return {
     gemini: config.gemini.apiKey ? 'live' : 'demo',
-    photon: config.photon.relayUrl ? 'live' : 'demo',
+    photon: config.photon.apiUrl || config.photon.relayUrl ? 'live' : 'demo',
     supabase: isSupabaseConfigured() ? 'live' : 'demo',
   };
 }

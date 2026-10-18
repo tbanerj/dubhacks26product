@@ -11,6 +11,7 @@
     "messaging:seed": "bun src/scripts/seed.ts",
     "messaging:reset-demo": "bun src/scripts/reset-demo.ts",
     "messaging:test": "bun test",
+    "messaging:doctor": "bun src/scripts/doctor.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

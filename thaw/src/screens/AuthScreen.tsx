@@ -48,7 +48,7 @@ export function AuthScreen({ navigation, route }: RootScreenProps<'Auth'>) {
   const [mode, setMode] = useState<AuthMode>(route.params?.mode ?? 'signIn');
   const [email, setEmail] = useState(route.params?.email ?? '');
   const [password, setPassword] = useState('');
-  const [name, setName] = useState(useGameStore.getState().player.name);
+  const [name, setName] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(route.params?.message ?? null);
@@ -163,7 +163,7 @@ export function AuthScreen({ navigation, route }: RootScreenProps<'Auth'>) {
         ) : (
           <Card style={{ gap: spacing.md }}>
             {mode === 'signUp' && (
-              <Field label="Explorer name" value={name} onChangeText={setName} maxLength={24} autoCapitalize="words" textContentType="nickname" error={nameErr} />
+              <Field label="Explorer name" value={name} onChangeText={setName} placeholder="Explorer" maxLength={24} autoCapitalize="words" textContentType="nickname" error={nameErr} />
             )}
             {mode !== 'newPassword' && (
               <Field

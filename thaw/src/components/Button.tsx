@@ -1,11 +1,14 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, type StyleProp, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { haptic } from '../utils/haptics';
 import { TOUCH } from '../theme/tokens';
+import { motion, stopAndTiming } from '../theme/motion';
 import { useTheme } from '../theme/useTheme';
 import type { IconName } from '../theme/palette';
-import { GlassSurface } from './GlassSurface';
+import { GlassSurface, type GlassVariant } from './GlassSurface';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type Variant = 'primary' | 'secondary' | 'sunset' | 'ghost' | 'danger';
 
@@ -23,7 +26,7 @@ export interface ButtonProps {
 
 /** Primary and secondary actions. `sunset` matches primary so older call sites stay on the forest accent. */
 export function Button({ label, onPress, variant = 'primary', icon, disabled, loading, compact, style, accessibilityHint }: ButtonProps) {
-  const { colors, radii, type } = useTheme();
+  const { colors, radii, type, reduceMotion } = useTheme();
   const v = variant === 'sunset' ? 'primary' : variant;
   const palette = {
     primary: { bg: colors.primary, fg: colors.onPrimary, border: colors.primary },
@@ -32,26 +35,36 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
     danger: { bg: colors.dangerSoft, fg: colors.danger, border: 'transparent' },
   }[v];
   const inactive = disabled || loading;
+  const opacity = useRef(new Animated.Value(inactive && !loading ? 0.45 : 1)).current;
+  const resting = inactive && !loading ? 0.45 : 1;
+
+  useEffect(() => {
+    stopAndTiming(opacity, resting, motion.press, reduceMotion);
+  }, [opacity, resting, reduceMotion]);
 
   return (
-    <Pressable
+    <AnimatedPressable
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={accessibilityHint}
       accessibilityState={{ disabled: !!inactive, busy: !!loading }}
       disabled={inactive}
+      onPressIn={() => {
+        if (!inactive) stopAndTiming(opacity, 0.88, motion.press, reduceMotion);
+      }}
+      onPressOut={() => stopAndTiming(opacity, resting, motion.press, reduceMotion)}
       onPress={() => {
         haptic.tap();
         onPress();
       }}
-      style={({ pressed }) => [
+      style={[
         styles.face,
         compact && styles.compact,
         {
           backgroundColor: palette.bg,
           borderColor: palette.border,
           borderRadius: radii.pill,
-          opacity: inactive && !loading ? 0.45 : pressed ? 0.88 : 1,
+          opacity,
         },
         style,
       ]}
@@ -66,7 +79,7 @@ export function Button({ label, onPress, variant = 'primary', icon, disabled, lo
           </Text>
         </>
       )}
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 
@@ -75,6 +88,7 @@ export function IconButton({
   label,
   onPress,
   glass,
+  glassVariant = 'regular',
   color,
   disabled,
 }: {
@@ -82,27 +96,43 @@ export function IconButton({
   label: string;
   onPress: () => void;
   glass?: boolean;
+  glassVariant?: GlassVariant;
   color?: string;
   disabled?: boolean;
 }) {
-  const { colors } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const glyph = color ?? colors.text;
+  const opacity = useRef(new Animated.Value(disabled ? 0.45 : 1)).current;
+  const resting = disabled ? 0.45 : 1;
+  useEffect(() => {
+    stopAndTiming(opacity, resting, motion.press, reduceMotion);
+  }, [opacity, resting, reduceMotion]);
   const face = (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       disabled={disabled}
+      onPressIn={() => {
+        if (!disabled) stopAndTiming(opacity, 0.75, motion.press, reduceMotion);
+      }}
+      onPressOut={() => stopAndTiming(opacity, resting, motion.press, reduceMotion)}
       onPress={() => {
         haptic.tap();
         onPress();
       }}
-      style={({ pressed }) => [styles.iconBtn, { opacity: disabled ? 0.4 : pressed ? 0.75 : 1 }]}
+      style={styles.iconBtn}
     >
-      <MaterialCommunityIcons name={icon} size={22} color={glyph} />
+      <Animated.View style={{ opacity }}>
+        <MaterialCommunityIcons name={icon} size={22} color={glyph} />
+      </Animated.View>
     </Pressable>
   );
   if (!glass) return face;
-  return <GlassSurface style={styles.glassBtn}>{face}</GlassSurface>;
+  return (
+    <GlassSurface style={styles.glassBtn} variant={glassVariant}>
+      {face}
+    </GlassSurface>
+  );
 }
 
 const styles = StyleSheet.create({

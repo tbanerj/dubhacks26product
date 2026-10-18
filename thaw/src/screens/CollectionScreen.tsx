@@ -1,5 +1,5 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, Text, type DimensionValue } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Modal, Pressable, ScrollView, StyleSheet, useWindowDimensions, View, Text, type DimensionValue } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import type { TabScreenProps } from '../navigation/types';
@@ -9,6 +9,7 @@ import { Button } from '../components/Button';
 import { EmptyState, ProgressBar } from '../components/Paper';
 import { PinArt } from '../components/PinArt';
 import { useTheme } from '../theme/useTheme';
+import { motion, stopAndTiming } from '../theme/motion';
 import { RARITY_STYLE, THEME_STYLE } from '../theme/palette';
 import { collectibleIdFor } from '../game/progression';
 import { formatDate } from '../utils/format';
@@ -30,7 +31,7 @@ interface Slot {
 type Scope = 'earned' | 'nearby';
 
 export function CollectionScreen({ navigation }: TabScreenProps<'Collection'>) {
-  const { colors, type, radii } = useTheme();
+  const { colors, type, radii, reduceMotion } = useTheme();
   const { width } = useWindowDimensions();
   const owned = useGameStore((s) => s.progress.collectibles);
   const completions = useGameStore((s) => s.progress.completions);
@@ -40,6 +41,21 @@ export function CollectionScreen({ navigation }: TabScreenProps<'Collection'>) {
   const [scope, setScope] = useState<Scope>('earned');
   const [theme, setTheme] = useState<CollectibleTheme | 'all'>('all');
   const [open, setOpen] = useState<Slot | null>(null);
+  const gridOpacity = useRef(new Animated.Value(1)).current;
+  const skipFilterFade = useRef(true);
+
+  useEffect(() => {
+    if (skipFilterFade.current) {
+      skipFilterFade.current = false;
+      return;
+    }
+    if (reduceMotion) {
+      gridOpacity.setValue(1);
+      return;
+    }
+    gridOpacity.setValue(0.45);
+    stopAndTiming(gridOpacity, 1, motion.selection, false);
+  }, [scope, theme, gridOpacity, reduceMotion]);
 
   useFocusEffect(
     useCallback(() => {
@@ -77,7 +93,8 @@ export function CollectionScreen({ navigation }: TabScreenProps<'Collection'>) {
   const pool = scope === 'earned' ? slots.unlocked : slots.locked;
   const visible = theme === 'all' ? pool : pool.filter((s) => s.theme === theme);
   const total = slots.unlocked.length + slots.locked.length;
-  const tileWidth = width >= 700 ? '31%' : '47%';
+  const cols = width >= 1000 ? 4 : width >= 700 ? 3 : 2;
+  const tileWidth = (`${Math.floor(100 / cols) - (cols === 2 ? 3 : 2)}%`) as DimensionValue;
 
   return (
     <ScreenShell title={t('collection.title')} subtitle={`${slots.unlocked.length} of ${Math.max(total, slots.unlocked.length)} discovered`} tab>
@@ -93,21 +110,23 @@ export function CollectionScreen({ navigation }: TabScreenProps<'Collection'>) {
         ))}
       </ScrollView>
 
-      {visible.length === 0 ? (
-        <EmptyState icon="pin-outline" title={scope === 'earned' ? t('collection.empty') : 'Nothing undiscovered nearby.'} body={scope === 'nearby' ? 'New places show up as you explore.' : undefined} />
-      ) : (
-        <View style={styles.grid}>
-          {visible.map((slot) => (
-            <PinTile key={slot.id} slot={slot} width={tileWidth} onPress={() => setOpen(slot)} />
-          ))}
-        </View>
-      )}
+      <Animated.View style={{ opacity: gridOpacity }}>
+        {visible.length === 0 ? (
+          <EmptyState icon="pin-outline" title={scope === 'earned' ? t('collection.empty') : 'Nothing undiscovered nearby.'} body={scope === 'nearby' ? 'New places show up as you explore.' : undefined} />
+        ) : (
+          <View style={styles.grid}>
+            {visible.map((slot) => (
+              <PinTile key={slot.id} slot={slot} width={tileWidth} onPress={() => setOpen(slot)} />
+            ))}
+          </View>
+        )}
+      </Animated.View>
 
       <Modal visible={!!open} transparent animationType="slide" onRequestClose={() => setOpen(null)}>
         <Pressable style={styles.scrim} onPress={() => setOpen(null)} accessibilityLabel="Dismiss pin details">
           {open && (
             <Pressable onPress={() => undefined} style={[styles.sheet, { backgroundColor: colors.surface }]} accessibilityViewIsModal>
-              <View style={styles.handle} />
+              <View style={[styles.handle, { backgroundColor: colors.border }]} />
               <Pressable onPress={() => setOpen(null)} accessibilityRole="button" accessibilityLabel="Close" style={styles.close}>
                 <MaterialCommunityIcons name="close" size={20} color={colors.text} />
               </Pressable>
@@ -201,13 +220,13 @@ function PinTile({ slot, onPress, width }: { slot: Slot; onPress: () => void; wi
 
 const styles = StyleSheet.create({
   segment: { flexDirection: 'row', padding: 4 },
-  seg: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
-  theme: { minHeight: 36, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
+  seg: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  theme: { minHeight: 44, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center', borderWidth: StyleSheet.hairlineWidth },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   tile: { flexGrow: 1, alignItems: 'center', padding: 12, borderWidth: StyleSheet.hairlineWidth, gap: 4, minHeight: 150 },
   lock: { position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   scrim: { flex: 1, backgroundColor: 'rgba(18,24,21,0.45)', justifyContent: 'flex-end' },
   sheet: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20, paddingTop: 12, gap: 8, alignItems: 'center' },
-  handle: { width: 36, height: 4, borderRadius: 2, backgroundColor: '#E4E2D8', marginBottom: 8 },
+  handle: { width: 36, height: 4, borderRadius: 2, marginBottom: 8 },
   close: { position: 'absolute', top: 12, right: 12, width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
 });

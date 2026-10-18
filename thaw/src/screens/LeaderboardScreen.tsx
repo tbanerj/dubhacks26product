@@ -121,6 +121,6 @@ function Row({ row, unit }: { row: BoardRow; unit: string }) {
 
 const styles = StyleSheet.create({
   segment: { flexDirection: 'row', padding: 4 },
-  seg: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center' },
+  seg: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 8, minHeight: 56 },
 });

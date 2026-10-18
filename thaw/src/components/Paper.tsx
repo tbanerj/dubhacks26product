@@ -1,7 +1,8 @@
-import React from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { ActivityIndicator, Animated, Pressable, StyleSheet, Text, View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../theme/useTheme';
+import { motion, stopAndTiming } from '../theme/motion';
 import type { IconName } from '../theme/palette';
 
 export function Card({ children, style, tint }: { children: React.ReactNode; style?: StyleProp<ViewStyle>; tint?: string }) {
@@ -72,16 +73,31 @@ export function Notice({ icon = 'information-outline', text, tone = 'info' }: { 
 }
 
 export function ProgressBar({ fraction, color, height = 8, label }: { fraction: number; color?: string; height?: number; label?: string }) {
-  const { colors } = useTheme();
+  const { colors, reduceMotion } = useTheme();
   const pct = Math.max(0, Math.min(1, fraction));
+  const [track, setTrack] = React.useState(0);
+  const fill = useRef(new Animated.Value(pct)).current;
+  useEffect(() => {
+    stopAndTiming(fill, pct, motion.selection, reduceMotion, false);
+  }, [fill, pct, reduceMotion]);
+  const onLayout = (e: LayoutChangeEvent) => {
+    const next = e.nativeEvent.layout.width;
+    setTrack((prev) => (Math.abs(prev - next) < 0.5 ? prev : next));
+  };
+  const fillStyle = { height: '100%' as const, backgroundColor: color ?? colors.primary, borderRadius: height / 2 };
   return (
     <View
+      onLayout={onLayout}
       style={[styles.track, { height, borderRadius: height / 2, backgroundColor: colors.surfaceMuted }]}
       accessibilityRole="progressbar"
       accessibilityLabel={label}
       accessibilityValue={{ min: 0, max: 100, now: Math.round(pct * 100) }}
     >
-      <View style={{ width: `${pct * 100}%`, height: '100%', backgroundColor: color ?? colors.primary, borderRadius: height / 2 }} />
+      {track > 0 ? (
+        <Animated.View style={[fillStyle, { width: fill.interpolate({ inputRange: [0, 1], outputRange: [0, track] }) }]} />
+      ) : (
+        <View style={[fillStyle, { width: `${pct * 100}%` }]} />
+      )}
     </View>
   );
 }

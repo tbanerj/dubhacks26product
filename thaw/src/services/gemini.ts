@@ -182,27 +182,18 @@ export async function generateQuests(req: QuestRequest, timeoutMs = 20_000): Pro
 
     const byId = new Map(req.landmarks.map((l) => [l.id, l]));
     const ai: Quest[] = [];
-    let rejected = 0;
     for (const item of list.data.quests) {
       const v = validateQuest(item, byId, 'gemini');
       if (v.ok) ai.push(v.quest);
-      else rejected++;
     }
     const aiFiltered = applyPreferences(ai, req);
     const covered = new Set(aiFiltered.map((q) => q.landmarkId));
     const fill = local.filter((q) => !covered.has(q.landmarkId));
     const quests = [...aiFiltered, ...fill];
     const source = aiFiltered.length === 0 ? 'local' : fill.length === 0 ? 'gemini' : 'mixed';
-    const note =
-      aiFiltered.length === 0
-        ? 'AI quests were unusable, so Thaw used its built-in quests.'
-        : rejected > 0
-          ? `${rejected} AI quest${rejected === 1 ? '' : 's'} failed safety or format checks and were replaced.`
-          : null;
-    return { quests, source, note };
-  } catch (e) {
-    const msg = controller.signal.aborted ? 'timed out' : e instanceof Error ? e.message : 'unknown error';
-    return { quests: local, source: 'local', note: `AI quests unavailable (${msg}). Using built-in quests.` };
+    return { quests, source, note: null };
+  } catch {
+    return { quests: local, source: 'local', note: null };
   } finally {
     clearTimeout(timer);
   }

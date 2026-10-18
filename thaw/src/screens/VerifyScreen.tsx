@@ -125,10 +125,10 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
           <MaterialCommunityIcons name="camera-outline" size={36} color="#F4F3EC" />
         </View>
       )}
-      <View style={[styles.top, { paddingTop: insets.top + 8 }]}>
-        <IconButton icon="close" label="Close" glass color="#1C2420" onPress={() => navigation.goBack()} />
-        <View style={styles.instruction}>
-          <Text style={[type.small, { color: '#1C2420', textAlign: 'center' }]} numberOfLines={2}>
+      <View pointerEvents="box-none" style={[styles.top, { top: insets.top + 4 }]}>
+        <IconButton icon="close" label="Close" glass glassVariant="regular" color="#F4F3EC" onPress={() => navigation.goBack()} />
+        <View style={[styles.instruction, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+          <Text style={[type.small, { color: colors.text, textAlign: 'center' }]} numberOfLines={2}>
             {instruction}
           </Text>
         </View>
@@ -137,16 +137,16 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
 
       <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 16) }]}>
         {phase.kind === 'checking' && (
-          <View style={styles.banner} accessibilityLiveRegion="polite">
+          <View style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.border }]} accessibilityLiveRegion="polite">
             <ActivityIndicator color={colors.primary} />
-            <Text style={[type.bodyStrong, { color: '#1C2420' }]}>{t('verify.checking')}</Text>
-            <Text style={[type.small, { color: '#1C2420' }]}>{live ? t('verify.checkingLive') : t('verify.checkingDemo')}</Text>
+            <Text style={[type.bodyStrong, { color: colors.text }]}>{t('verify.checking')}</Text>
+            <Text style={[type.small, { color: colors.text }]}>{live ? t('verify.checkingLive') : t('verify.checkingDemo')}</Text>
           </View>
         )}
         {phase.kind === 'rejected' && (
-          <View style={styles.banner}>
-            <Text style={[type.bodyStrong, { color: '#1C2420' }]}>{t('verify.rejected')}</Text>
-            <Text style={[type.small, { color: '#1C2420' }]}>{phase.result.feedback}</Text>
+          <View style={[styles.banner, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+            <Text style={[type.bodyStrong, { color: colors.text }]}>{t('verify.rejected')}</Text>
+            <Text style={[type.small, { color: colors.text }]}>{phase.result.feedback}</Text>
           </View>
         )}
         {phase.kind === 'error' && <Notice tone="warn" text={`${phase.message} Your photo is still here.`} />}
@@ -187,10 +187,10 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
 const styles = StyleSheet.create({
   root: { flex: 1 },
   placeholder: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  top: { position: 'absolute', left: 12, right: 12, flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  instruction: { flex: 1, backgroundColor: 'rgba(248,248,243,0.92)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
+  top: { position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 8, zIndex: 30 },
+  instruction: { flex: 1, borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, paddingHorizontal: 12, paddingVertical: 10, minHeight: 44, justifyContent: 'center' },
   bottom: { position: 'absolute', left: 16, right: 16, bottom: 0, gap: 10 },
-  banner: { backgroundColor: 'rgba(248,248,243,0.94)', borderRadius: 16, padding: 12, gap: 4 },
+  banner: { borderRadius: 16, borderWidth: StyleSheet.hairlineWidth, padding: 12, gap: 4 },
   actions: { flexDirection: 'row', gap: 8 },
   shutterRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   side: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },

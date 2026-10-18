@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Animated, PanResponder, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import { useTheme } from '../theme/useTheme';
+import { springs } from '../theme/motion';
 
 /**
  * Two-snap sheet. The handle and peek drag between `collapsed` and `expanded`.
@@ -26,34 +27,54 @@ export function BottomSheet({
   const [dragStart] = useState(() => ({ value: collapsed }));
   const [open, setOpen] = useState(false);
 
+  const runtime = useRef({ collapsed, expanded, reduceMotion, onExpandedChange });
+  runtime.current = { collapsed, expanded, reduceMotion, onExpandedChange };
+
+  useEffect(() => {
+    if (open) return;
+    height.setValue(collapsed);
+  }, [collapsed, height, open]);
+
   const snap = (toExpanded: boolean) => {
-    const to = toExpanded ? expanded : collapsed;
+    const current = runtime.current;
+    const to = toExpanded ? current.expanded : current.collapsed;
     setOpen(toExpanded);
-    onExpandedChange?.(toExpanded);
-    if (reduceMotion) {
+    current.onExpandedChange?.(toExpanded);
+    if (current.reduceMotion) {
       height.setValue(to);
       return;
     }
-    Animated.spring(height, { toValue: to, useNativeDriver: false, friction: 9, tension: 80 }).start();
+    Animated.spring(height, { toValue: to, ...springs.layout }).start();
   };
 
-  const pan = PanResponder.create({
-    onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
-    onPanResponderGrant: () => {
-      height.stopAnimation((value) => {
-        dragStart.value = value;
-      });
-    },
-    onPanResponderMove: (_, g) => {
-      height.setValue(clamp(dragStart.value - g.dy, collapsed, expanded));
-    },
-    onPanResponderRelease: (_, g) => {
-      height.stopAnimation((current) => {
-        const midpoint = (collapsed + expanded) / 2;
-        snap(g.vy < -0.45 || (g.vy < 0.45 && current > midpoint));
-      });
-    },
-  });
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        height.stopAnimation((value) => {
+          dragStart.value = value;
+        });
+      },
+      onPanResponderMove: (_, g) => {
+        const { collapsed: min, expanded: max } = runtime.current;
+        height.setValue(clamp(dragStart.value - g.dy, min, max));
+      },
+      onPanResponderRelease: (_, g) => {
+        height.stopAnimation((current) => {
+          const { collapsed: min, expanded: max } = runtime.current;
+          const midpoint = (min + max) / 2;
+          snap(g.vy < -0.45 || (g.vy < 0.45 && current > midpoint));
+        });
+      },
+      onPanResponderTerminate: () => {
+        height.stopAnimation((current) => {
+          const { collapsed: min, expanded: max } = runtime.current;
+          snap(current > (min + max) / 2);
+        });
+      },
+    }),
+  ).current;
 
   return (
     <Animated.View style={[styles.sheet, shadow, { height, backgroundColor: colors.surface, borderColor: colors.border, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl }, style]}>

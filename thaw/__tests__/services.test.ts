@@ -72,7 +72,7 @@ describe('gemini service (key configured)', () => {
     expect(batch.source).toBe('mixed');
     expect(batch.quests.some((q: Quest) => q.source === 'gemini' && q.title === 'Ripple Reader')).toBe(true);
     expect(batch.quests.some((q: Quest) => q.title === 'Bad')).toBe(false);
-    expect(batch.note).toMatch(/failed safety or format checks/);
+    expect(batch.note).toBeNull();
     // Every landmark still has a quest.
     for (const l of req.landmarks) expect(batch.quests.some((q: Quest) => q.landmarkId === l.id)).toBe(true);
   });
@@ -84,7 +84,7 @@ describe('gemini service (key configured)', () => {
     global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 503, json: async () => ({}) }) as never;
     const b2 = await g.generateQuests(req);
     expect(b2.source).toBe('local');
-    expect(b2.note).toMatch(/503/);
+    expect(b2.note).toBeNull();
     global.fetch = jest.fn().mockRejectedValue(new Error('offline')) as never;
     expect((await g.generateQuests(req)).quests.length).toBeGreaterThan(0);
   });
@@ -123,7 +123,7 @@ describe('gemini service (key configured)', () => {
     }) as never;
     const batch = await g.generateQuests(req);
     expect(batch.source).toBe('local');
-    expect(batch.note).toMatch(/MAX_TOKENS/);
+    expect(batch.note).toBeNull();
   });
 
   const photo = { quest: { title: 'Q', evidence: 'A photo of the fountain' } as Quest, landmarkName: 'X', image: { uri: 'file://a.jpg', base64: 'aaa', mimeType: 'image/jpeg' } };

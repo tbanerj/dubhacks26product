@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Alert, Platform, StyleSheet, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import type { RootScreenProps } from '../navigation/types';
 import { useGameStore, type AppearancePreference } from '../store/useGameStore';
 import { ScreenShell } from '../components/ScreenShell';
@@ -15,10 +15,11 @@ const APPEARANCES: { id: AppearancePreference; label: string }[] = [
   { id: 'dark', label: 'Dark' },
 ];
 
-export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
+export function SettingsScreen({ navigation }: RootScreenProps<'Settings'>) {
   const { colors, type, radii } = useTheme();
   const settings = useGameStore((s) => s.settings);
   const account = useGameStore((s) => s.account);
+  const playerName = useGameStore((s) => s.player.name);
   const updateSettings = useGameStore((s) => s.updateSettings);
   const setDemoMode = useGameStore((s) => s.setDemoMode);
   const signOut = useGameStore((s) => s.signOut);
@@ -76,6 +77,7 @@ export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
       <Text style={type.tiny}>ACCOUNT</Text>
       <Card style={{ gap: 12 }}>
         <Text style={type.bodyStrong}>{account?.email ?? 'Signed in'}</Text>
+        <SettingsRow icon="account-edit-outline" label="Profile" hint={playerName} onPress={() => navigation.navigate('EditAvatar')} />
         <Integration name="Supabase" status={integrations.supabase} demo="Accounts are not configured" />
         <Integration name="Gemini" status={integrations.gemini} demo="Built-in quests and simulated photo checks" />
         <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
@@ -106,15 +108,15 @@ export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
           {APPEARANCES.map((item) => {
             const on = settings.appearance === item.id;
             return (
-              <Text
+              <Pressable
                 key={item.id}
                 onPress={() => updateSettings({ appearance: item.id })}
                 accessibilityRole="radio"
                 accessibilityState={{ checked: on }}
-                style={[styles.seg, type.bodyStrong, { color: on ? colors.onPrimary : colors.textSecondary, backgroundColor: on ? colors.primary : 'transparent', borderRadius: radii.pill }]}
+                style={[styles.seg, { backgroundColor: on ? colors.primary : 'transparent', borderRadius: radii.pill }]}
               >
-                {item.label}
-              </Text>
+                <Text style={[type.bodyStrong, { color: on ? colors.onPrimary : colors.textSecondary }]}>{item.label}</Text>
+              </Pressable>
             );
           })}
         </View>
@@ -157,5 +159,5 @@ function Integration({ name, status, demo, note }: { name: string; status: 'live
 
 const styles = StyleSheet.create({
   segment: { flexDirection: 'row', padding: 4 },
-  seg: { flex: 1, textAlign: 'center', paddingVertical: 10, overflow: 'hidden', minHeight: 40 },
+  seg: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 44 },
 });

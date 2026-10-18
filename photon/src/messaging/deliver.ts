@@ -1,5 +1,6 @@
 import type { Runtime } from "../game/engine.ts";
 import type { OutboxItem } from "./contracts.ts";
+import { promptStillAllowed } from "./scheduler.ts";
 
 export async function deliverOutbox(
   runtime: Runtime,
@@ -10,15 +11,28 @@ export async function deliverOutbox(
       runtime.store.markOutbox(item.operationKey, "failed", undefined, "attempt_limit");
       continue;
     }
-    if (runtime.store.optedOutConversation(item.conversationId)) {
-      runtime.store.markOutbox(item.operationKey, "suppressed", undefined, "opt_out");
+    if (item.purpose === "prompt" && !promptStillAllowed(runtime, item.conversationId)) {
+      runtime.store.markOutbox(item.operationKey, "suppressed", undefined, "ineligible");
       continue;
+    }
+    if (runtime.store.optedOutConversation(item.conversationId)) {
+      const stopAck = item.purpose !== "prompt" && /paused|stopped|text start/i.test(item.text);
+      if (!stopAck) {
+        runtime.store.markOutbox(item.operationKey, "suppressed", undefined, "opt_out");
+        continue;
+      }
     }
     try {
       const sent = await send(item);
       runtime.store.markOutbox(item.operationKey, "sent", sent?.providerMessageId);
     } catch (error) {
       const category = errorCategory(error);
+      if (category === "registration") {
+        runtime.store.markOutbox(item.operationKey, "failed", undefined, category);
+        runtime.store.setProviderBlocked(category, runtime.now().toISOString());
+        console.log(JSON.stringify({ event: "outbox_error", operationKey: item.operationKey, category }));
+        continue;
+      }
       const unknown = category === "timeout" || category === "network";
       runtime.store.markOutbox(item.operationKey, unknown ? "delivery_unknown" : "failed", undefined, category);
       console.log(JSON.stringify({ event: "outbox_error", operationKey: item.operationKey, category }));
@@ -28,6 +42,7 @@ export async function deliverOutbox(
 
 function errorCategory(error: unknown): string {
   const message = error instanceof Error ? error.message.toLowerCase() : "";
+  if (message.includes("target not allowed")) return "registration";
   if (message.includes("timeout")) return "timeout";
   if (message.includes("network") || message.includes("unavailable")) return "network";
   if (message.includes("auth") || message.includes("permission")) return "auth";

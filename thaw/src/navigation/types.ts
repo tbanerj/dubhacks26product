@@ -20,6 +20,7 @@ export type RootStackParamList = {
   RegionPicker: undefined;
   Leaderboard: undefined;
   Settings: undefined;
+  PlayByText: undefined;
   EditAvatar: undefined;
   PartyChat: undefined;
   Auth: { mode?: 'signIn' | 'signUp' | 'checkEmail' | 'forgot' | 'newPassword'; email?: string; message?: string } | undefined;

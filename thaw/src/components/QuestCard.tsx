@@ -102,6 +102,6 @@ export function QuestPreview({
 
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 12, borderWidth: StyleSheet.hairlineWidth },
-  preview: { gap: 10, paddingHorizontal: 16, paddingBottom: 12 },
+  preview: { gap: 8, paddingHorizontal: 16, paddingBottom: 4 },
   previewTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
 });

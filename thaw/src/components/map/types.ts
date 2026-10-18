@@ -12,6 +12,8 @@ export interface GameMapProps {
   selectedId: string | null;
   onSelectHub: (landmarkId: string) => void;
   onLongPress?: (c: LatLng) => void;
+  /** A tap on the map itself, so a nearby event can be selected without leaving the map. */
+  onMapPress?: (c: LatLng) => void;
   /** Increment to recenter the camera on the player. */
   recenterToken: number;
   /** Increment (with `focus`) to fly the camera to a coordinate. */

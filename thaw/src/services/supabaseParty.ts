@@ -231,6 +231,8 @@ export class SupabasePartyService implements PartyService {
   setQuest(questId: string | null, questTitle?: string | null) {
     if (!supabase || !this.state.party?.isHost) return;
     const client = supabase;
+    const party = this.state.party;
+    this.set({ party: { ...party, questId, questTitle: questId ? (questTitle ?? party.questTitle ?? null) : null } });
     void this.run(() => client.rpc('set_party_quest', { p_quest_id: questId, p_quest_title: questId ? (questTitle ?? null) : null }), false);
   }
 

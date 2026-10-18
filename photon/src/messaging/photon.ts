@@ -1,11 +1,13 @@
 import { imessage } from "@spectrum-ts/imessage";
 import { Spectrum } from "spectrum-ts";
 import type { Runtime } from "../game/engine.ts";
-import { deliverDueReminders, settleSubmission, stageIncoming } from "../game/engine.ts";
+import { deliverDueReminders, settleLive, settleSubmission, stageIncoming } from "../game/engine.ts";
+import { syncPendingRewards } from "../game/sync.ts";
 import { cleanupExpiredMedia } from "../jobs/retention.ts";
 import type { IncomingMessage, OutboxItem } from "./contracts.ts";
 import { deliverOutbox } from "./deliver.ts";
 import { extractContent } from "./extract.ts";
+import { runScheduler } from "./scheduler.ts";
 
 /**
  * Stable Spectrum Cloud iMessage. This is the only live transport.
@@ -33,8 +35,10 @@ export async function runPhoton(runtime: Runtime): Promise<void> {
   await deliverOutbox(runtime, sendItem);
   const timer = setInterval(() => {
     deliverDueReminders(runtime);
+    runScheduler(runtime);
     cleanupExpiredMedia(runtime);
     void deliverOutbox(runtime, sendItem);
+    void syncPendingRewards(runtime);
   }, 15_000);
 
   const shutdown = async () => {
@@ -67,7 +71,11 @@ export async function runPhoton(runtime: Runtime): Promise<void> {
       };
       console.log(JSON.stringify({ event: "inbound", messageId: message.id, attachments: extracted.attachments.length }));
       const staged = stageIncoming(runtime, incoming);
-      if (staged.submissionId) settleSubmission(runtime, staged.submissionId, undefined);
+      if (staged.submissionId) {
+        if (runtime.config.verifier === "live") await settleLive(runtime, staged.submissionId);
+        else settleSubmission(runtime, staged.submissionId, "success");
+      }
+      await syncPendingRewards(runtime);
       await deliverOutbox(runtime, sendItem);
     }
   } finally {

@@ -1,12 +1,12 @@
-import React from 'react';
-import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { Alert, Platform, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 import type { TabScreenProps } from '../navigation/types';
-import { useGameStore } from '../store/useGameStore';
+import { useGameStore, type AppearancePreference } from '../store/useGameStore';
 import { ScreenShell } from '../components/ScreenShell';
 import { Card, ProgressBar, SettingsRow } from '../components/Paper';
-import { IconButton } from '../components/Button';
+import { Button, IconButton } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
 import { regionById } from '../data/regions';
@@ -15,7 +15,7 @@ import { formatDate, formatNumber } from '../utils/format';
 import { t } from '../i18n/strings';
 
 export function YouScreen({ navigation }: TabScreenProps<'You'>) {
-  const { colors, type } = useTheme();
+  const { colors, type, radii } = useTheme();
   const s = useGameStore(
     useShallow((st) => ({
       player: st.player,
@@ -27,6 +27,11 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
     })),
   );
   const setDemoMode = useGameStore((st) => st.setDemoMode);
+  const updateSettings = useGameStore((st) => st.updateSettings);
+  const settings = useGameStore((st) => st.settings);
+  const signOut = useGameStore((st) => st.signOut);
+  const deleteAccount = useGameStore((st) => st.deleteAccount);
+  const [deleting, setDeleting] = useState(false);
   const lp = levelProgress(s.progress.totalXp);
   const streak = currentStreak(s.progress);
   const today = dailyXp(s.progress);
@@ -87,9 +92,93 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
       </View>
       <Text style={type.small}>Today · {formatNumber(today)} XP</Text>
 
-      <Card style={{ padding: 0 }}>
+      <Card style={styles.linkCard}>
         <SettingsRow icon="book-outline" label="Collection" onPress={() => navigation.navigate('Collection')} />
         <SettingsRow icon="trophy-outline" label="Leaderboards" onPress={() => navigation.navigate('Leaderboard')} />
+      </Card>
+
+      <Text style={type.tiny}>SETTINGS</Text>
+      <Card style={{ gap: 12 }}>
+        <Text style={type.bodyStrong}>Appearance</Text>
+        <View style={[styles.segment, { backgroundColor: colors.surfaceMuted, borderRadius: radii.pill }]} accessibilityRole="radiogroup">
+          {(['system', 'light', 'dark'] as AppearancePreference[]).map((id) => {
+            const on = (settings.appearance ?? 'system') === id;
+            const label = id === 'system' ? 'System' : id === 'light' ? 'Light' : 'Dark';
+            return (
+              <Pressable
+                key={id}
+                onPress={() => updateSettings({ appearance: id })}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: on }}
+                style={[styles.seg, { backgroundColor: on ? colors.primary : 'transparent', borderRadius: radii.pill }]}
+              >
+                <Text style={[type.bodyStrong, { color: on ? colors.onPrimary : colors.textSecondary }]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
+        <SettingsRow
+          icon="ruler"
+          label="Units"
+          value={settings.units === 'imperial' ? 'Imperial' : 'Metric'}
+          control={
+            <Switch
+              value={settings.units === 'imperial'}
+              onValueChange={(v) => updateSettings({ units: v ? 'imperial' : 'metric' })}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={colors.surface}
+              accessibilityLabel="Imperial units"
+            />
+          }
+        />
+        <SettingsRow
+          icon="walk"
+          label="Prefer solo"
+          hint="New quests default to solo"
+          control={
+            <Switch
+              value={settings.preferSolo}
+              onValueChange={(v) => updateSettings({ preferSolo: v })}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={colors.surface}
+              accessibilityLabel="Prefer solo quests"
+            />
+          }
+        />
+        <SettingsRow
+          icon="timer-outline"
+          label="Shorter walks"
+          hint="Suggest shorter, lower-mobility quests"
+          control={
+            <Switch
+              value={settings.mobilityFriendly}
+              onValueChange={(v) => updateSettings({ mobilityFriendly: v })}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={colors.surface}
+              accessibilityLabel="Shorter walks"
+            />
+          }
+        />
+        <SettingsRow icon="account-edit-outline" label="Profile" hint={s.player.name} onPress={() => navigation.navigate('EditAvatar')} />
+        <Button label="Sign out" variant="secondary" onPress={() => void signOut()} />
+        <Button
+          label="Delete account"
+          variant="danger"
+          loading={deleting}
+          onPress={() => {
+            const go = async () => {
+              setDeleting(true);
+              const res = await deleteAccount();
+              setDeleting(false);
+              if (!res.ok) Alert.alert('Couldn’t delete account', res.error ?? 'Try again in a moment.');
+            };
+            if (Platform.OS === 'web') return void go();
+            Alert.alert('Delete account?', 'This removes your explorer, XP, pins, and parties. It cannot be undone.', [
+              { text: t('common.cancel'), style: 'cancel' },
+              { text: 'Delete', style: 'destructive', onPress: () => void go() },
+            ]);
+          }}
+        />
       </Card>
 
       <Text style={type.heading}>Recent adventures</Text>
@@ -134,4 +223,7 @@ const styles = StyleSheet.create({
   stats: { flexDirection: 'row', borderRadius: 20, borderWidth: StyleSheet.hairlineWidth, paddingVertical: 12 },
   stat: { flex: 1, alignItems: 'center', gap: 2 },
   history: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  linkCard: { paddingVertical: 4, paddingLeft: 14, paddingRight: 8 },
+  segment: { flexDirection: 'row', padding: 4 },
+  seg: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
 });

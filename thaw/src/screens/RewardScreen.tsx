@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { RootScreenProps } from '../navigation/types';
@@ -22,17 +22,30 @@ export function RewardScreen({ navigation }: RootScreenProps<'Reward'>) {
   const photo = useGameStore((s) => s.pendingEvidenceUri);
   const clearLastReward = useGameStore((s) => s.clearLastReward);
   const [xpShown, setXpShown] = useState(0);
+  const played = useRef<string | null>(null);
+  const rewardKey = reward
+    ? `${reward.xpGained}|${reward.levelBefore}|${reward.levelAfter}|${reward.collectible?.id ?? ''}|${reward.streak}|${reward.newLandmark}`
+    : '';
 
   useEffect(() => {
-    if (!reward || reduceMotion) return;
+    if (!reward) return;
+    if (reduceMotion) {
+      setXpShown(reward.xpGained);
+      played.current = rewardKey;
+      return;
+    }
+    if (played.current === rewardKey) return;
+    played.current = rewardKey;
+    setXpShown(0);
+    const gained = reward.xpGained;
     const start = Date.now();
     const id = setInterval(() => {
       const f = Math.min(1, (Date.now() - start) / 700);
-      setXpShown(Math.round(reward.xpGained * (1 - Math.pow(1 - f, 3))));
+      setXpShown(Math.round(gained * (1 - Math.pow(1 - f, 3))));
       if (f >= 1) clearInterval(id);
     }, 30);
     return () => clearInterval(id);
-  }, [reward, reduceMotion]);
+  }, [reward, rewardKey, reduceMotion]);
 
   const finish = (to: 'Explore' | 'Collection') => {
     clearLastReward();

@@ -57,7 +57,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   const [focus, setFocus] = useState<{ coordinate: { latitude: number; longitude: number }; token: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
-  const [hiddenStatus, setHiddenStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const s = useGameStore.getState();
@@ -138,6 +137,9 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   const preview = selectedEntries.find((e) => e.status !== 'completed') ?? selectedEntries[0] ?? world.active ?? world.entries.find((e) => e.status !== 'completed') ?? world.entries[0] ?? null;
   const region = regionById(st.regionId);
   const bar = tabBarOffset(insets.bottom);
+  const side = Math.max(spacing.screen, insets.left);
+  const collapsed = Math.min(SHEET_COLLAPSED + bar, Math.round(height * 0.62));
+  const expanded = Math.max(collapsed + 48, Math.min(Math.round(height * 0.78), height - insets.top - 72));
   const posLabel = st.demoMode
     ? `Demo · ${region?.name ?? 'Seattle'}`
     : world.position.kind === 'gps'
@@ -147,9 +149,6 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
         : world.position.kind === 'manual'
           ? t('explore.manual')
           : `${region?.name ?? 'Sample'} · ${t('explore.sampleLocation')}`;
-
-  const status = dataStatus(st, world.position.kind);
-  const visibleStatus = status && status.text !== hiddenStatus ? status : null;
 
   const openPreview = () => {
     if (!preview) return;
@@ -172,15 +171,24 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
           const lm = world.lmById.get(id);
           if (lm) setFocus({ coordinate: lm.coordinate, token: Date.now() });
         }}
+        onMapPress={(coordinate) => {
+          let best: { id: string; d: number } | null = null;
+          for (const hub of world.hubs) {
+            const d = distanceMeters(coordinate, hub.landmark.coordinate);
+            if (!best || d < best.d) best = { id: hub.landmark.id, d };
+          }
+          if (!best || best.d > 220) return;
+          setSelectedId(best.id);
+        }}
         onLongPress={onLongPress}
         recenterToken={recenterToken}
         focus={focus}
       />
 
-      <View style={[styles.top, { paddingTop: insets.top + 8, paddingHorizontal: spacing.screen }]} pointerEvents="box-none">
+      <View style={[styles.top, { paddingTop: insets.top + 8, paddingLeft: side, paddingRight: Math.max(72, insets.right + 56) }]} pointerEvents="box-none">
         <View style={styles.topRow}>
           <Pressable onPress={() => navigation.navigate('You')} accessibilityRole="button" accessibilityLabel="Your profile">
-            <GlassSurface style={styles.avatar}>
+            <GlassSurface style={styles.avatar} variant="regular">
               <Critter hue={st.hue} size={36} />
             </GlassSurface>
           </Pressable>
@@ -188,22 +196,17 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             onPress={() => navigation.navigate('RegionPicker')}
             accessibilityRole="button"
             accessibilityLabel={`Location: ${posLabel}. Change where you explore.`}
-            style={{ flexShrink: 1 }}
+            style={{ flex: 1, minWidth: 0 }}
           >
-            <GlassSurface style={styles.locChip}>
+            <View style={[styles.locChip, { backgroundColor: colors.surface, borderColor: colors.border }]}>
               <MaterialCommunityIcons name="map-marker-outline" size={16} color={colors.text} />
               <Text style={[type.small, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>
                 {posLabel}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={16} color={colors.textSecondary} />
-            </GlassSurface>
+            </View>
           </Pressable>
         </View>
-        {visibleStatus && (
-          <Pressable onPress={() => setHiddenStatus(visibleStatus.text)} accessibilityRole="button" accessibilityLabel={`${visibleStatus.text}. Dismiss`}>
-            <Notice tone={visibleStatus.tone} icon={visibleStatus.tone === 'demo' ? 'flask-outline' : 'information-outline'} text={visibleStatus.text} />
-          </Pressable>
-        )}
         {gpsError && (
           <Pressable onPress={() => setGpsError(null)} accessibilityRole="button" accessibilityLabel="Dismiss location message">
             <Notice tone="warn" icon="map-marker-off-outline" text={`${gpsError} You can keep playing in a sample city.`} />
@@ -211,8 +214,8 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
         )}
       </View>
 
-      <View style={[styles.controls, { top: insets.top + 88 }]} pointerEvents="box-none">
-        <IconButton icon="crosshairs-gps" label="Recenter on me" glass onPress={() => setRecenterToken((n) => n + 1)} />
+      <View style={[styles.controls, { top: insets.top + 88, right: Math.max(16, insets.right) }]} pointerEvents="box-none">
+        <IconButton icon="crosshairs-gps" label="Recenter on me" glass glassVariant="regular" onPress={() => setRecenterToken((n) => n + 1)} />
         {world.position.kind === 'simulated' && (
           <IconButton
             icon="foot-print"
@@ -228,15 +231,15 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
         <IconButton icon="refresh" label="Refresh quests" glass onPress={() => void actions.reloadWorld()} />
       </View>
 
-      <Text style={[styles.attribution, type.tiny, { color: colors.textSecondary, bottom: bar + SHEET_COLLAPSED - 28, backgroundColor: colors.surface }]}>
+      <Text style={[styles.attribution, type.tiny, { color: colors.textSecondary, bottom: collapsed + 8, left: side, backgroundColor: colors.surface }]}>
         {st.demoMode && st.locationMode !== 'gps' ? 'Demo location · ' : ''}
         {t('explore.attribution')}
       </Text>
 
-      <View style={[styles.sheetWrap, { bottom: bar - 8 }]} pointerEvents="box-none">
-        <BottomSheet collapsed={SHEET_COLLAPSED} expanded={Math.min(Math.round(height * 0.62), 560)} peek={sheetPeek()}>
+      <View style={styles.sheetWrap} pointerEvents="box-none">
+        <BottomSheet collapsed={collapsed} expanded={expanded} peek={sheetPeek()}>
           <ScrollView
-            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 10 }}
+            contentContainerStyle={{ paddingHorizontal: side, paddingBottom: bar + 20, gap: 10 }}
             keyboardShouldPersistTaps="handled"
             refreshControl={<RefreshControl refreshing={st.worldStatus === 'loading'} onRefresh={() => void actions.reloadWorld()} tintColor={colors.primary} />}
           >
@@ -244,7 +247,9 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
               <Filter label="Solo quests" value={st.preferSolo} onChange={(v) => actions.updateSettings({ preferSolo: v })} />
               <Filter label="Shorter walks" value={st.mobilityFriendly} onChange={(v) => actions.updateSettings({ mobilityFriendly: v })} />
             </View>
-            {world.entries.map((item) => (
+            {[...world.entries]
+              .sort((a, b) => Number(!a.quest.title.endsWith(' (demo)')) - Number(!b.quest.title.endsWith(' (demo)')))
+              .map((item) => (
               <QuestCard
                 key={item.quest.id}
                 entry={item}
@@ -267,47 +272,36 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   );
 
   function sheetPeek() {
+    let body: React.ReactNode;
     if (st.worldStatus === 'loading' && !preview) {
-      return (
+      body = (
         <View style={styles.previewPad}>
           <Text style={type.subheading}>{t('explore.loading')}</Text>
         </View>
       );
-    }
-    if (!preview) {
-      return (
+    } else if (!preview) {
+      body = (
         <View style={styles.previewPad}>
           <EmptyState icon="map-search-outline" title={t('explore.empty')} body={t('explore.emptyHint')} action={<Button label="Pick a region" onPress={() => navigation.navigate('RegionPicker')} />} />
         </View>
       );
+    } else {
+      const action = preview.status === 'active' ? t('quest.continue') : 'View quest';
+      body = <QuestPreview entry={preview} units={st.units} actionLabel={action} onPress={openPreview} />;
     }
-    const action = preview.status === 'active' ? t('quest.continue') : 'View quest';
-    return <QuestPreview entry={preview} units={st.units} actionLabel={action} onPress={openPreview} />;
+    return body;
   }
 }
 
 function Filter({ label, value, onChange }: { label: string; value: boolean; onChange: (v: boolean) => void }) {
   const { colors, type } = useTheme();
+  const { width } = useWindowDimensions();
   return (
-    <View style={styles.filter}>
-      <Text style={type.small}>{label}</Text>
-      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel={label} />
+    <View style={[styles.filter, width < 360 && styles.filterNarrow]}>
+      <Text style={[type.small, styles.filterLabel]} numberOfLines={1}>{label}</Text>
+      <Switch value={value} onValueChange={onChange} trackColor={{ true: colors.primary, false: colors.textFaint }} thumbColor={colors.surface} accessibilityLabel={label} />
     </View>
   );
-}
-
-function dataStatus(
-  st: { worldStatus: string; worldNote: string | null; locationMode: string; questSource: string; demoMode: boolean },
-  kind: string,
-): { text: string; tone: 'info' | 'warn' | 'demo' } | null {
-  if (st.worldStatus === 'error') return { text: 'Couldn’t refresh this area. Tap refresh or pull the quest list.', tone: 'warn' };
-  if (st.worldNote) return { text: st.worldNote, tone: st.worldNote.startsWith('Showing saved places') ? 'info' : 'warn' };
-  if (st.demoMode && kind !== 'gps') return { text: 'Demo location. Quests, parties, and your account are live.', tone: 'demo' };
-  if (kind === 'simulated') return { text: 'Simulated position', tone: 'demo' };
-  if ((st.locationMode === 'region' || kind === 'sample') && st.questSource === 'local') return { text: 'Sample places', tone: 'demo' };
-  if (st.questSource === 'local') return { text: 'Built-in quests', tone: 'demo' };
-  if (st.questSource === 'mixed') return { text: 'Some quests are built-in', tone: 'demo' };
-  return null;
 }
 
 function LocationGate({ permission, note, busy, onEnable }: { permission: string; note: string | null; busy: boolean; onEnable: () => void }) {
@@ -329,16 +323,18 @@ function LocationGate({ permission, note, busy, onEnable }: { permission: string
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  top: { position: 'absolute', left: 0, right: 72, gap: 8, zIndex: 2, elevation: 4 },
+  top: { position: 'absolute', left: 0, right: 0, gap: 8, zIndex: 2, elevation: 4 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
-  locChip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, maxWidth: 240, paddingHorizontal: 12, borderRadius: 22 },
-  controls: { position: 'absolute', right: 16, gap: 8, zIndex: 2, elevation: 4 },
-  attribution: { position: 'absolute', left: 16, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden', maxWidth: '70%' },
-  sheetWrap: { position: 'absolute', left: 12, right: 12, zIndex: 3, elevation: 6 },
+  locChip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, paddingHorizontal: 12, borderRadius: 22, borderWidth: StyleSheet.hairlineWidth },
+  controls: { position: 'absolute', gap: 8, zIndex: 2, elevation: 4 },
+  attribution: { position: 'absolute', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden', maxWidth: '70%' },
+  sheetWrap: { position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 3, elevation: 6 },
   previewPad: { paddingHorizontal: 16, paddingBottom: 12 },
-  filters: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
-  filter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
+  filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  filter: { flexGrow: 1, flexBasis: 160, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44, gap: 8 },
+  filterNarrow: { flexBasis: '100%' },
+  filterLabel: { flexShrink: 1 },
   scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(18,24,21,0.45)', justifyContent: 'flex-end', padding: 16, zIndex: 5, elevation: 8 },
   onboard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 20, gap: 10, alignItems: 'stretch' },
 });

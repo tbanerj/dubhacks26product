@@ -1,5 +1,5 @@
 import { findUnsafeContent, validateQuest } from '../src/game/questSchema';
-import { generateLocalQuests } from '../src/game/localQuests';
+import { demoQuestsForLandmark, generateLocalQuests, withDemoQuests } from '../src/game/localQuests';
 import { DEMO_REGIONS, sampleSpotsAround, seededLandmarks } from '../src/data/regions';
 import type { Landmark, LandmarkCategory } from '../src/types';
 
@@ -113,5 +113,18 @@ describe('generateLocalQuests', () => {
     }
     const unicode: Landmark = { ...lm, id: 'u1', name: '代々木公園 🌳 Ōkubo', category: 'park' };
     expect(generateLocalQuests([unicode])[0]?.collectible.name.length).toBeGreaterThan(0);
+  });
+
+  it('adds three easy (demo) quests on the nearest landmark', () => {
+    const near: Landmark = { ...lm, id: 'near', coordinate: { latitude: 47.65, longitude: -122.31 } };
+    const far: Landmark = { ...lm, id: 'far', coordinate: { latitude: 47.7, longitude: -122.2 } };
+    const demos = demoQuestsForLandmark(near);
+    expect(demos.map((q) => q.title)).toEqual(['Find a Book (demo)', 'Read a Sign (demo)', 'Spot a Seat (demo)']);
+    expect(demos.every((q) => q.title.endsWith(' (demo)') && q.mode === 'solo' && q.difficulty === 'easy' && q.durationMin === 5)).toBe(true);
+
+    const merged = withDemoQuests([far, near], [], near.coordinate);
+    expect(merged).toHaveLength(3);
+    expect(merged.every((q) => q.landmarkId === 'near')).toBe(true);
+    expect(withDemoQuests([near], demos, near.coordinate)).toHaveLength(3);
   });
 });

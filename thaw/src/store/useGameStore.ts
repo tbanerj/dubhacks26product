@@ -33,7 +33,7 @@ import { DEMO_REGIONS, GENERIC_REGION_ID, nearestRegion, regionById, sampleSpots
 import { localDayKey, shiftDayKey } from '../game/dates';
 import { applyCompletion, levelForXp } from '../game/progression';
 import { CHECK_IN_RADIUS_M, distanceMeters, isValidCoordinate, offsetMeters } from '../game/geo';
-import { generateLocalQuests } from '../game/localQuests';
+import { generateLocalQuests, withDemoQuests } from '../game/localQuests';
 import type { ActiveQuest } from '../game/questStatus';
 import { discoverPlaces } from '../services/places';
 import { generateQuests } from '../services/gemini';
@@ -358,7 +358,7 @@ export const useGameStore = create<GameState>()(
             mobilityFriendly: prev.settings.mobilityFriendly,
           });
           if (requestId !== worldRequestId) return;
-          let quests = batch.quests;
+          let quests = withDemoQuests(landmarks, batch.quests, center);
           if (active && !quests.some((q) => q.id === active.id)) quests = [active, ...quests];
 
           set({
@@ -375,7 +375,7 @@ export const useGameStore = create<GameState>()(
           set({
             worldCenter: center,
             landmarks,
-            quests: generateLocalQuests(landmarks),
+            quests: withDemoQuests(landmarks, generateLocalQuests(landmarks), center),
             questSource: 'local',
             worldStatus: 'ready',
             worldNote: `${reason} Showing built-in quests instead.`,
