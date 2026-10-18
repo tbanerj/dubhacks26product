@@ -94,9 +94,9 @@ For [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app
 THAW_SIGNUP_ALLOWED_ORIGINS=https://dubhacks26product.vercel.app,http://localhost:5173,http://127.0.0.1:5173
 ```
 
-Restart `bun start` after that change. Then open a tunnel to port 3001 and set the Vercel variable `PHOTON_SIGNUP_URL` to `https://<tunnel-host>/api/public/signup`. The site function `meltmode-website/api/public/signup.js` forwards the browser `Origin` to that URL. Full steps are in `../meltmode-website/README.md`. A preview deployment origin has to be added explicitly. There is no wildcard.
+Restart `bun start` after that change. Then open a tunnel to port 3001 and set the Vercel variable `PHOTON_SIGNUP_URL` to `https://<tunnel-host>/api/public/signup`. The site function `thaw-website/api/public/signup.js` forwards the browser `Origin` to that URL. Full steps are in `../thaw-website/README.md`. A preview deployment origin has to be added explicitly. There is no wildcard.
 
-Local `npm run dev` in `meltmode-website/` still proxies straight to `127.0.0.1:3001` and does not need the tunnel.
+Local `npm run dev` in `thaw-website/` still proxies straight to `127.0.0.1:3001` and does not need the tunnel.
 
 ## Photos
 

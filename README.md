@@ -5,12 +5,12 @@ Thaw is a real-world quest game. This repo has five product locations, and they 
 | Folder | What it is | Where it runs |
 | --- | --- | --- |
 | `thaw/` | Expo React Native game | Expo Go on your machine, or a TestFlight / APK build. It is not a Vercel app |
-| `meltmode-website/` | Marketing site and "play by text" signup | [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/) |
+| `thaw-website/` | Marketing site and "play by text" signup | [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/) |
 | `photon/` | Spectrum iMessage service | A computer you leave running. It is not a Vercel function |
 | `supabase/` | Postgres schema and the delete-account function | A cloud Supabase project. This repo has no local Supabase stack |
 | `docs/` | Setup notes | Phone builds, Photon setup, and the merge record |
 
-Start the game from `thaw/` with `npm install` and `npx expo start`. Start the website from `meltmode-website/` with `npm install` and `npm run dev`. Start messaging from `photon/` with `bun start`. Apply the SQL files in `supabase/migrations/` on the cloud project before expecting accounts, parties, or text-quest XP to save.
+Start the game from `thaw/` with `npm install` and `npx expo start`. Start the website from `thaw-website/` with `npm install` and `npm run dev`. Start messaging from `photon/` with `bun start`. Apply the SQL files in `supabase/migrations/` on the cloud project before expecting accounts, parties, or text-quest XP to save.
 
 Phone builds that do not need this Mac are in [docs/thaw-native.md](docs/thaw-native.md). Photon credentials and the iMessage listener are in [photon/README.md](photon/README.md) and [docs/photon-setup.md](docs/photon-setup.md).
 
@@ -30,12 +30,12 @@ The website form does not talk to Photon by itself. It only POSTs to `/api/publi
 
 Two paths reach that same Photon route:
 
-- **On your computer.** `npm run dev` in `meltmode-website/` proxies `/api/public/signup` to `http://127.0.0.1:3001`. No tunnel is required.
-- **On the live Vercel site.** The browser still posts to the Vercel domain. `meltmode-website/api/public/signup.js` forwards that request, including the browser `Origin`, to `PHOTON_SIGNUP_URL`. That URL is a tunnel to the Photon process on `127.0.0.1:3001`.
+- **On your computer.** `npm run dev` in `thaw-website/` proxies `/api/public/signup` to `http://127.0.0.1:3001`. No tunnel is required.
+- **On the live Vercel site.** The browser still posts to the Vercel domain. `thaw-website/api/public/signup.js` forwards that request, including the browser `Origin`, to `PHOTON_SIGNUP_URL`. That URL is a tunnel to the Photon process on `127.0.0.1:3001`.
 
 Vercel cannot call `127.0.0.1` on a laptop. Photon also cannot move onto Vercel: it needs a long-lived Bun process and a SQLite file that survives restarts.
 
-Step-by-step setup for the live site is in [meltmode-website/README.md](meltmode-website/README.md).
+Step-by-step setup for the live site is in [thaw-website/README.md](thaw-website/README.md).
 
 ## Secrets
 

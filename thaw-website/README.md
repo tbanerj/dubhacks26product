@@ -58,7 +58,7 @@ Text signup on the live site needs the proxy below. A static host by itself cann
 ## Live site on Vercel
 
 The deployed site is [https://dubhacks26product.vercel.app/](https://dubhacks26product.vercel.app/).
-Set the Vercel project's root directory to `meltmode-website`. There is no `vercel.json` in this repo; the project settings live in the Vercel dashboard. The build is the Vite static site plus one serverless function, `api/public/signup.js`. That function reads `PHOTON_SIGNUP_URL` and nothing else. Photon stays on a computer you control. The Expo app is hosted on its own and does not use this proxy.
+Set the Vercel project's root directory to `thaw-website`. There is no `vercel.json` in this repo; the project settings live in the Vercel dashboard. The build is the Vite static site plus one serverless function, `api/public/signup.js`. That function reads `PHOTON_SIGNUP_URL` and nothing else. Photon stays on a computer you control. The Expo app is hosted on its own and does not use this proxy.
 
 The form in `src/pages/ByText.tsx` always calls `fetch('/api/public/signup')` on the site's own origin.
 Locally, the Vite proxy in `vite.config.ts` sends that path to `http://127.0.0.1:3001`.
