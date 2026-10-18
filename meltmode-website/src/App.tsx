@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import Home from './pages/Home'
 import Demo from './pages/Demo'
@@ -59,16 +59,33 @@ function Logo() {
 
 export default function App() {
   const [path, setPath] = useState(getPath())
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const menuToggleRef = useRef<HTMLButtonElement>(null)
 
   // When the web address changes (a menu click or the Back button), show the new page
   useEffect(() => {
     const onChange = () => {
       setPath(getPath())
+      setIsMenuOpen(false)
       window.scrollTo(0, 0)
     }
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
+
+  useEffect(() => {
+    if (!isMenuOpen) return
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsMenuOpen(false)
+        menuToggleRef.current?.focus()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [isMenuOpen])
 
   return (
     <>
@@ -78,13 +95,27 @@ export default function App() {
             <Logo />
             <span>MeltMode</span>
           </a>
-          <nav className="site-nav" aria-label="Main">
+          <button
+            ref={menuToggleRef}
+            className="menu-toggle"
+            type="button"
+            aria-label={isMenuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            aria-controls="main-navigation"
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen((open) => !open)}
+          >
+            <span />
+            <span />
+            <span />
+          </button>
+          <nav id="main-navigation" className={isMenuOpen ? 'site-nav is-open' : 'site-nav'} aria-label="Main">
             {PAGES.map((page) => (
               <a
                 key={page.path}
                 href={'#' + page.path}
                 className={page.path === path ? 'nav-link active' : 'nav-link'}
                 aria-current={page.path === path ? 'page' : undefined}
+                onClick={() => setIsMenuOpen(false)}
               >
                 {page.label}
               </a>

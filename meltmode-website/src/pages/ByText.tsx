@@ -2,163 +2,147 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import './ByText.css'
 
-/* ---------------------------------------------------------------
-   Paste your partner's sign-up web address here when it's ready,
-   e.g. 'https://your-backend.com/api/text-signup'
-   While it's empty (''), the form shows "Coming soon".
-   Never put a Photon API key in this file: website code is public.
----------------------------------------------------------------- */
-const SIGNUP_ENDPOINT = ''
+type SignupState = 'idle' | 'sending' | 'error'
+const GENERIC_ERROR = 'We couldn’t reach the signup service. Your number was not registered. Check your connection and try again.'
 
-// CONFIRM with your partner: does text play work like these steps?
-const STEPS = [
-  { title: 'Sign up', text: 'Enter your phone number below. No app, no account, no storage needed.' },
-  { title: 'Get quests by text', text: 'We’ll text you fun quests to try at public places around you.' },
-  { title: 'Reply to play', text: 'Answer our texts to join a quest, check in, and keep your progress going.' },
-]
+const ERROR_MESSAGES: Record<string, string> = {
+  age_confirmation_required: 'Please confirm that you’re 18 or older to continue.',
+  consent_required: 'Please agree to the phone-number and messaging terms to continue.',
+  invalid_request: 'Enter a valid phone number, including your area code.',
+  rate_limited: 'Too many signup attempts from this connection. Please wait a few minutes and try again.',
+  signup_unavailable: 'Signup is temporarily unavailable. Your number was not registered. Please try again later.',
+  origin_not_allowed: 'This website is not authorized to create signups. Please contact the MeltMode team.',
+}
 
-type Status = 'idle' | 'sending' | 'done' | 'error'
+function formatPhoneNumber(phone: string): string {
+  const usNumber = phone.match(/^\+1(\d{3})(\d{3})(\d{4})$/)
+  return usNumber ? `+1 (${usNumber[1]}) ${usNumber[2]}-${usNumber[3]}` : phone
+}
 
 export default function ByText() {
   const [phone, setPhone] = useState('')
-  const [isAdult, setIsAdult] = useState(false)
-  const [agreed, setAgreed] = useState(false)
-  const [status, setStatus] = useState<Status>('idle')
-  const [message, setMessage] = useState('')
-
-  const isLive = SIGNUP_ENDPOINT !== ''
-  const formLocked = !isLive || status === 'sending'
+  const [ageConfirmed, setAgeConfirmed] = useState(false)
+  const [consent, setConsent] = useState(false)
+  const [state, setState] = useState<SignupState>('idle')
+  const [error, setError] = useState('')
+  const [assignedPhoneNumber, setAssignedPhoneNumber] = useState<string | null>(null)
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    setError('')
+    setState('sending')
 
-    const digits = phone.replace(/\D/g, '')
-    if (digits.length < 10 || digits.length > 15) {
-      setStatus('error')
-      setMessage('Please enter a full phone number, including the area code.')
-      return
-    }
-    if (!isAdult) {
-      setStatus('error')
-      setMessage('MeltMode is only for people 18 and older. Please confirm your age to sign up.')
-      return
-    }
-    if (!agreed) {
-      setStatus('error')
-      setMessage('Please tick the box to agree to receive texts.')
-      return
-    }
-
-    setStatus('sending')
     try {
-      // CONFIRM with your partner: what information his server expects
-      const response = await fetch(SIGNUP_ENDPOINT, {
+      const response = await fetch('/api/public/signup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: phone.trim(), ageConfirmed: true, consent: true }),
+        body: JSON.stringify({ phone, ageConfirmed, consent }),
       })
-      if (!response.ok) throw new Error('Sign-up failed')
-      setStatus('done')
-      setMessage('You’re signed up! Watch for your first text from MeltMode.')
-      setPhone('')
-      setIsAdult(false)
-      setAgreed(false)
+      const result: { assignedPhoneNumber?: unknown; error?: unknown } = await response.json()
+      if (!response.ok) {
+        const key = typeof result.error === 'string' ? result.error : ''
+        setError(ERROR_MESSAGES[key] ?? 'Signup failed. Your number was not registered. Please try again.')
+        setState('error')
+        return
+      }
+      if (typeof result.assignedPhoneNumber !== 'string' || !/^\+[1-9]\d{6,14}$/.test(result.assignedPhoneNumber)) {
+        setError('Signup could not be confirmed. Your number was not registered. Please try again.')
+        setState('error')
+        return
+      }
+      setAssignedPhoneNumber(result.assignedPhoneNumber)
     } catch {
-      setStatus('error')
-      setMessage('Something went wrong and you weren’t signed up. Please try again in a moment.')
+      setError(GENERIC_ERROR)
+      setState('error')
     }
+  }
+
+  if (assignedPhoneNumber) {
+    const displayNumber = formatPhoneNumber(assignedPhoneNumber)
+    return (
+      <section className="container text-page">
+        <div className="text-card" aria-live="polite">
+          <span className="pill">Your text line is ready</span>
+          <h1>One tap to start.</h1>
+          <p className="text-lead">Use this MeltMode number to start your iMessage conversation.</p>
+          <a
+            className="btn btn-primary sms-link"
+            href={`sms:${assignedPhoneNumber}`}
+            aria-label={`Text MeltMode at ${displayNumber}`}
+          >
+            Text {displayNumber}
+          </a>
+          <p className="text-footnote">We haven’t sent you a message. Tapping the button opens a new text to MeltMode.</p>
+          <button className="text-reset" type="button" onClick={() => {
+            setAssignedPhoneNumber(null)
+            setPhone('')
+            setAgeConfirmed(false)
+            setConsent(false)
+            setState('idle')
+          }}>
+            Use a different number
+          </button>
+        </div>
+      </section>
+    )
   }
 
   return (
     <section className="container text-page">
-      <div className="text-intro">
+      <div className="text-card">
         <span className="pill">Get it by text</span>
-        <h1>No room for another app? Play by text.</h1>
+        <h1>Take MeltMode with you.</h1>
         <p className="text-lead">
-          Not everyone has the storage, data, or patience for one more app. With MeltMode by text, quests
-          come to you as text messages instead.
+          Enter your mobile number and we’ll set up your text line. Then tap once to open a message to MeltMode.
         </p>
 
-        <ol className="text-steps">
-          {STEPS.map((step, i) => (
-            <li key={step.title}>
-              <span className="text-step-num">{i + 1}</span>
-              <div>
-                <strong>{step.title}</strong>
-                <p>{step.text}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-
-      <div className="text-side">
-        {/* A little illustrated text conversation */}
-        <div className="chat" aria-hidden="true">
-          <div className="bubble them">New quest nearby: The Local Lens. Find a detail most people walk past. Reply JOIN to play.</div>
-          <div className="bubble me">JOIN</div>
-          <div className="bubble them">You’re in! Send a photo of your find when you’re ready. +100 XP waiting.</div>
-        </div>
-
-        <form className="signup" onSubmit={handleSubmit} noValidate>
-          <h2>Sign up for texts</h2>
-
-          <label htmlFor="phone">Phone number</label>
+        <form className="text-signup" onSubmit={handleSubmit} aria-busy={state === 'sending'}>
+          <label htmlFor="signup-phone">Your phone number</label>
           <input
-            id="phone"
+            id="signup-phone"
+            name="phone"
             type="tel"
             autoComplete="tel"
-            placeholder="(206) 555-0123"
+            inputMode="tel"
+            placeholder="+1 (206) 555-0123"
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            disabled={formLocked}
+            onChange={(event) => setPhone(event.target.value)}
+            required
+            disabled={state === 'sending'}
+            aria-describedby="phone-hint"
           />
+          <p id="phone-hint" className="text-footnote">US numbers can be entered with or without +1. Your number is sent securely to Photon to set up your shared text line.</p>
 
-          <label className="consent">
+          <label className="text-consent">
             <input
               type="checkbox"
-              checked={isAdult}
-              onChange={(e) => setIsAdult(e.target.checked)}
-              disabled={formLocked}
+              checked={ageConfirmed}
+              onChange={(event) => setAgeConfirmed(event.target.checked)}
+              required
+              disabled={state === 'sending'}
             />
-            <span>I’m 18 or older.</span>
+            <span>I confirm that I’m 18 or older.</span>
           </label>
-
-          <label className="consent">
+          <label className="text-consent">
             <input
               type="checkbox"
-              checked={agreed}
-              onChange={(e) => setAgreed(e.target.checked)}
-              disabled={formLocked}
+              checked={consent}
+              onChange={(event) => setConsent(event.target.checked)}
+              required
+              disabled={state === 'sending'}
             />
             <span>
-              I agree to receive text messages from MeltMode. Message frequency varies. Message and data
-              rates may apply. Reply STOP to opt out. See our{' '}            
-                <a href="#/privacy">privacy policy</a>.
+              I agree that MeltMode will send my number to Photon (Spectrum Cloud) to set up my text line.
+              Signup does not send a text; I’ll start the conversation myself. After I text MeltMode, I agree
+              to receive service messages. Message frequency varies; message and data rates may apply. I can
+              opt out by texting STOP. See our <a href="#/privacy">privacy policy</a>.
             </span>
           </label>
 
-          {isLive ? (
-            <button className="btn btn-primary" type="submit" disabled={status === 'sending'}>
-              {status === 'sending' ? 'Signing you up…' : 'Text me quests'}
-            </button>
-          ) : (
-            <button className="btn coming-soon-btn" type="button" disabled>
-              Coming soon
-            </button>
-          )}
-
-          {!isLive && (
-            <p className="form-note">
-              Text sign-up isn’t open yet. In the meantime, <a href="#/demo">try the demo</a>.
-            </p>
-          )}
-
-          {message && (
-            <p className={'form-message ' + status} role="status">
-              {message}
-            </p>
-          )}
+          <button className="btn btn-primary" type="submit" disabled={state === 'sending'}>
+            {state === 'sending' ? 'Setting up your text line…' : 'Set up text line'}
+          </button>
+          <p className="form-message error" role="alert" hidden={state !== 'error'}>{error}</p>
         </form>
       </div>
     </section>

@@ -21,7 +21,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s-4);
-  min-height: 72px;
+  height: 72px;
 }
 
 .brand {
@@ -36,6 +36,31 @@
 }
 
 .site-nav { display: flex; gap: var(--s-1); }
+
+.menu-toggle {
+  display: none;
+  flex: 0 0 44px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--sage);
+  color: var(--brand-dark);
+  cursor: pointer;
+}
+.menu-toggle span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  margin: 4px 0;
+  border-radius: var(--r-pill);
+  background: currentColor;
+  transition: transform var(--t), opacity var(--t);
+}
+.menu-toggle[aria-expanded='true'] span:first-child { transform: translateY(6px) rotate(45deg); }
+.menu-toggle[aria-expanded='true'] span:nth-child(2) { opacity: 0; }
+.menu-toggle[aria-expanded='true'] span:last-child { transform: translateY(-6px) rotate(-45deg); }
 
 .nav-link {
   display: inline-flex;
@@ -129,6 +154,15 @@
 .footer-bottom a { color: rgba(248, 248, 243, 0.85); transition: color var(--t); }
 .footer-bottom a:hover { color: var(--amber); }
 
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100svh;
+}
+
+#root > main { flex: 1 0 auto; }
+
 /* ===== Privacy policy page ===== */
 .legal {
   max-width: 760px;
@@ -155,18 +189,35 @@
 
 /* ===== Phones and small screens ===== */
 @media (max-width: 760px) {
-  .header-inner {
-    flex-wrap: wrap;
-    padding-top: var(--s-3);
-    padding-bottom: var(--s-2);
-  }
+  .menu-toggle { display: block; }
   .site-nav {
-    width: 100%;
-    overflow-x: auto;
-    margin: 0 calc(var(--s-3) * -1);
-    padding: 0 var(--s-1);
+    position: absolute;
+    top: 100%;
+    right: 0;
+    left: 0;
+    display: none;
+    padding: var(--s-2) var(--s-4);
+    border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    box-shadow: var(--shadow-card);
+  }
+  .site-nav.is-open {
+    display: grid;
+    gap: var(--s-1);
+  }
+  .site-nav .nav-link {
+    min-height: 48px;
+    padding: 0 var(--s-3);
+    border: 0;
+    border-radius: var(--r-md);
+  }
+  .site-nav .nav-link.active {
+    background: var(--sage);
   }
   .footer-inner { grid-template-columns: 1fr 1fr; gap: var(--s-5); }
   .footer-brand { grid-column: 1 / -1; }
   .legal-summary { padding: var(--s-5); }
 }
+
+.footer-col a { overflow-wrap: anywhere; }
+.legal { overflow-wrap: anywhere; }

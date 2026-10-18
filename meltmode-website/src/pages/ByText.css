@@ -1,119 +1,93 @@
 .text-page {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--s-8);
-  align-items: start;
-  padding-top: var(--s-8);
-}
-
-/* Left side */
-.text-intro { display: grid; gap: var(--s-4); }
-.text-intro h1 { font-size: clamp(36px, 5vw, 56px); }
-.text-lead { font-size: 18px; color: var(--text-soft); }
-
-.text-steps { list-style: none; padding: 0; margin: var(--s-3) 0 0; display: grid; gap: var(--s-5); }
-.text-steps li { display: flex; gap: var(--s-4); align-items: flex-start; }
-.text-steps strong { font-size: 18px; }
-.text-steps p { color: var(--text-soft); font-size: 16px; }
-.text-step-num {
-  flex: 0 0 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--brand);
-  color: var(--on-brand);
+  min-height: 64vh;
   display: grid;
   place-items: center;
-  font-weight: 700;
+  padding-top: var(--s-8);
+  padding-bottom: var(--s-8);
 }
 
-/* Right side */
-.text-side { display: grid; gap: var(--s-5); }
-
-.chat {
-  background: var(--sage);
-  border-radius: var(--r-lg);
-  padding: var(--s-5);
+.text-card {
+  width: min(100%, 680px);
   display: grid;
-  gap: 10px;
-}
-.bubble {
-  max-width: 80%;
-  padding: var(--s-3) var(--s-4);
-  border-radius: 20px;
-  font-size: 15px;
-  line-height: 1.45;
-  animation: bubbleIn 0.3s ease both;
-}
-.bubble.them { background: var(--card); color: var(--text); border-bottom-left-radius: 6px; }
-.bubble.me {
-  justify-self: end;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 600;
-  border-bottom-right-radius: 6px;
-  animation-delay: 0.4s;
-}
-.bubble.them:last-child { animation-delay: 0.8s; }
-
-/* The form */
-.signup {
-  background: var(--card);
+  justify-items: center;
+  gap: var(--s-4);
+  padding: clamp(24px, 7vw, 64px);
   border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  padding: var(--s-6);
+  border-radius: var(--r-lg);
+  background: var(--card);
   box-shadow: var(--shadow-card);
+  text-align: center;
+}
+
+.text-card h1 { font-size: clamp(36px, 7vw, 56px); }
+.text-lead { max-width: 480px; color: var(--text-soft); font-size: 18px; }
+.text-footnote { max-width: 480px; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.text-footnote a { color: var(--brand); font-weight: 600; }
+
+.text-signup {
+  width: min(100%, 440px);
   display: grid;
   gap: var(--s-3);
+  margin-top: var(--s-2);
+  text-align: left;
 }
-.signup h2 { font-size: 24px; margin-bottom: var(--s-1); }
-.signup label { font-weight: 600; font-size: 15px; }
-.signup input[type='tel'] {
+.text-signup > label:first-child { font-size: 15px; font-weight: 700; }
+.text-signup input[type='tel'] {
+  width: 100%;
   min-height: 52px;
   padding: 0 var(--s-4);
   border: 1.5px solid var(--border);
   border-radius: var(--r-md);
   background: var(--bg);
-  font: 500 17px var(--font);
   color: var(--text);
-  transition: border-color var(--t), box-shadow var(--t);
+  font: 500 17px var(--font);
 }
-.signup input[type='tel']::placeholder { color: var(--text-muted); }
-.signup input[type='tel']:focus-visible {
+.text-signup input[type='tel']:focus-visible {
   outline: none;
   border-color: var(--brand);
   box-shadow: 0 0 0 3px rgba(36, 92, 70, 0.18);
 }
-.signup input:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.consent {
+.text-signup input:disabled { opacity: 0.6; }
+.text-consent {
   display: flex;
-  gap: 10px;
   align-items: flex-start;
-  font-weight: 400 !important;
-  font-size: 13px !important;
+  gap: 10px;
+  color: var(--text-soft);
+  font-size: 13px;
   line-height: 1.5;
-  color: var(--text-muted);
 }
-.consent input {
+.text-consent input {
   width: 20px;
   height: 20px;
-  margin: 0;
   flex: 0 0 20px;
+  margin: 1px 0 0;
   accent-color: var(--brand);
 }
-.consent a, .form-note a { color: var(--brand); font-weight: 600; text-underline-offset: 3px; }
+.text-consent a { color: var(--brand); font-weight: 600; text-underline-offset: 2px; }
+.text-signup .btn { width: 100%; margin-top: var(--s-1); }
+.text-signup .btn:disabled { cursor: wait; }
+.text-signup [role='alert'] { padding: var(--s-3); border-radius: var(--r-md); background: var(--error-soft); color: var(--error); }
+.text-signup [role='alert'][hidden] { display: none; }
+.sms-link {
+  max-width: 100%;
+  min-height: 56px;
+  font-size: clamp(18px, 5vw, 24px);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.text-reset {
+  border: 0;
+  padding: var(--s-2);
+  background: transparent;
+  color: var(--brand);
+  font: 600 15px var(--font);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
 
-.signup .btn { margin-top: var(--s-2); }
-.coming-soon-btn { cursor: default; }
-
-.form-note { font-size: 14px; color: var(--text-muted); }
-.form-message { font-size: 15px; font-weight: 600; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); }
-.form-message.done { background: var(--success-soft); color: var(--success); }
-.form-message.error { background: var(--error-soft); color: var(--error); }
-
-@keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-
-@media (max-width: 860px) {
-  .text-page { grid-template-columns: 1fr; gap: var(--s-6); }
-  .signup { padding: var(--s-5); }
+@media (max-width: 560px) {
+  .text-page { min-height: 58vh; padding-top: var(--s-6); padding-bottom: var(--s-6); }
+  .text-card { gap: var(--s-3); border-radius: var(--r-card); }
+  .text-lead { font-size: 16px; }
 }

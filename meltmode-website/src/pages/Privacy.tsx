@@ -54,6 +54,12 @@ export default function Privacy() {
         own inbox, so those companies carry your messages and may keep them under their own privacy
         policies.
       </p>
+      <p>
+        If you sign up for play by text, we send the phone number you provide to Photon (Spectrum Cloud)
+        to register you as a shared project user and get the number assigned to your conversation. We do not
+        send a text as part of signup. When you tap the text link, your messaging app starts a conversation
+        with MeltMode. Photon processes your number under its own privacy policy.
+      </p>
 
       <h3 className="legal-sub">What we store</h3>
       <ul>
@@ -77,8 +83,9 @@ export default function Privacy() {
           (hashed) version of the code. Nothing is linked unless you confirm it in the app.
         </li>
         <li>
-          <strong>Testers.</strong> If you're registered as a tester, your phone number or email is also
-          saved in our Photon account.
+          <strong>Text signup.</strong> The phone number you submit for text signup is stored in our Photon
+          project so its shared messaging service can route your conversation. Our website does not save
+          that number in its own database.
         </li>
       </ul>
 
