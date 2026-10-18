@@ -111,7 +111,7 @@ export interface RewardSummary {
   streak: number;
 }
 
-export type VerificationSource = 'perceptron' | 'demo';
+export type VerificationSource = 'gemini' | 'demo';
 
 export interface VerificationResult {
   accepted: boolean;
@@ -140,6 +140,7 @@ export interface PartyMember {
   ready: boolean;
   isSelf: boolean;
   isDemo: boolean;
+  isHost?: boolean;
   level: number;
 }
 
@@ -168,7 +169,12 @@ export interface Party {
   name: string;
   members: PartyMember[];
   questId: string | null;
+  questTitle?: string | null;
   capacity: number;
+  /** Real parties only. */
+  code?: string;
+  isHost?: boolean;
+  expiresAt?: string;
 }
 
 export type ConnectionState = 'offline' | 'connecting' | 'simulated' | 'connected' | 'reconnecting';

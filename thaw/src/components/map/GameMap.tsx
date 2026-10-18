@@ -7,6 +7,7 @@ import { PAPER_MAP_STYLE } from './mapStyle';
 import { CATEGORY_STYLE } from '../../theme/palette';
 import { CHECK_IN_RADIUS_M } from '../../game/geo';
 import { colors } from '../../theme/tokens';
+import { motion } from '../../theme/motion';
 
 const PITCH = 40;
 const ZOOM = 15.2;
@@ -43,12 +44,12 @@ const HubPin = memo(function HubPin({ hub, selected, onSelect }: { hub: MapHub; 
   );
 });
 
-function GameMapImpl({ player, hubs, selectedId, onSelectHub, onLongPress, recenterToken, focus }: GameMapProps) {
+function GameMapImpl({ player, hubs, selectedId, onSelectHub, onLongPress, onMapPress, recenterToken, focus }: GameMapProps) {
   const ref = useRef<MapView>(null);
   const playerTracking = useSettledTracking([player.hue, player.label]);
 
   const flyTo = (center: { latitude: number; longitude: number }) => {
-    ref.current?.animateCamera({ center, pitch: PITCH, heading: 0, zoom: ZOOM, altitude: ALTITUDE }, { duration: 700 });
+    ref.current?.animateCamera({ center, pitch: PITCH, heading: 0, zoom: ZOOM, altitude: ALTITUDE }, { duration: motion.map });
   };
 
   useEffect(() => {
@@ -74,6 +75,7 @@ function GameMapImpl({ player, hubs, selectedId, onSelectHub, onLongPress, recen
       pitchEnabled
       showsCompass={false}
       toolbarEnabled={false}
+      onPress={onMapPress ? (e) => onMapPress(e.nativeEvent.coordinate) : undefined}
       onLongPress={onLongPress ? (e) => onLongPress(e.nativeEvent.coordinate) : undefined}
       accessibilityLabel="Quest map"
     >

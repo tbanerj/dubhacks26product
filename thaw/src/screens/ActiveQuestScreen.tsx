@@ -5,35 +5,22 @@ import type { RootScreenProps } from '../navigation/types';
 import { useGameStore } from '../store/useGameStore';
 import { useWorld } from '../hooks/useWorld';
 import { ScreenShell } from '../components/ScreenShell';
-import { Card, EmptyState, Notice, ProgressBar } from '../components/Paper';
+import { Card, EmptyState, MetaRow, Notice, ProgressBar } from '../components/Paper';
 import { Button } from '../components/Button';
-import { CATEGORY_STYLE, MODE_STYLE } from '../theme/palette';
-import { colors, fonts, spacing, type } from '../theme/tokens';
+import { PinArt } from '../components/PinArt';
+import { MODE_STYLE } from '../theme/palette';
+import { useTheme } from '../theme/useTheme';
 import { formatDistance } from '../utils/format';
-import { CHECK_IN_RADIUS_M, walkingMinutes } from '../game/geo';
+import { CHECK_IN_RADIUS_M, distanceMeters, walkingMinutes } from '../game/geo';
 import { t } from '../i18n/strings';
-
-type StepState = 'done' | 'current' | 'todo';
-
-function Step({ n, title, detail, state }: { n: number; title: string; detail?: string; state: StepState }) {
-  return (
-    <View style={styles.step} accessible accessibilityLabel={`Step ${n}: ${title}. ${state === 'done' ? 'Done' : state === 'current' ? 'Current step' : 'Not started'}`}>
-      <View style={[styles.dot, state === 'done' && { backgroundColor: colors.grass }, state === 'current' && { backgroundColor: colors.sunset }]}>
-        {state === 'done' ? <MaterialCommunityIcons name="check-bold" size={16} color={colors.ink} /> : <Text style={styles.dotText}>{n}</Text>}
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[type.subheading, state === 'todo' && { color: colors.inkFaint }]}>{title}</Text>
-        {detail ? <Text style={type.small}>{detail}</Text> : null}
-      </View>
-    </View>
-  );
-}
 
 export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>) {
   const world = useWorld();
+  const { colors, type } = useTheme();
   const active = useGameStore((s) => s.activeQuest);
   const units = useGameStore((s) => s.settings.units);
   const demoMode = useGameStore((s) => s.settings.demoMode);
+  const gpsPosition = useGameStore((s) => s.gpsPosition);
   const party = useGameStore((s) => s.party);
   const { checkIn, simulateWalkTo, abandonQuest } = useGameStore.getState();
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
@@ -42,16 +29,17 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   if (!active || !entry) {
     return (
       <ScreenShell title="No active quest" back>
-        <EmptyState icon="flag-outline" title="You’re free to roam." body="Pick a quest on the map to start an adventure." action={<Button label="Find a quest" icon="compass-outline" onPress={() => navigation.navigate('Tabs', { screen: 'Explore' })} />} />
+        <EmptyState icon="flag-outline" title="You’re free to roam." body="Pick a quest on the map to start an adventure." action={<Button label="Find a quest" onPress={() => navigation.navigate('Tabs', { screen: 'Explore' })} />} />
       </ScreenShell>
     );
   }
 
   const { quest, landmark, distanceM } = entry;
-  const inRange = distanceM <= CHECK_IN_RADIUS_M;
+  const shownDistance = !demoMode && gpsPosition ? distanceMeters(gpsPosition, landmark.coordinate) : distanceM;
+  const inRange = shownDistance <= CHECK_IN_RADIUS_M;
   const checkedIn = active.checkedIn;
-  const cat = CATEGORY_STYLE[landmark.category];
-  const approach = Math.max(0, Math.min(1, 1 - (distanceM - CHECK_IN_RADIUS_M) / 1500));
+  const approach = Math.max(0, Math.min(1, 1 - (shownDistance - CHECK_IN_RADIUS_M) / 1500));
+  const mode = MODE_STYLE[active.soloVersion ? 'solo' : quest.mode];
 
   const openDirections = () => {
     const { latitude, longitude } = landmark.coordinate;
@@ -66,94 +54,93 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   };
 
   const doCheckIn = () => {
-    const res = checkIn();
-    if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
-    else setCheckMsg(null);
+    const go = async () => {
+      if (!useGameStore.getState().settings.demoMode) await useGameStore.getState().refreshGps();
+      const res = checkIn();
+      if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? shownDistance, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
+      else setCheckMsg(null);
+    };
+    void go();
+  };
+
+  const drop = () => {
+    abandonQuest();
+    navigation.goBack();
   };
 
   return (
-    <ScreenShell title={quest.title} subtitle={`${MODE_STYLE[active.soloVersion ? 'solo' : quest.mode].label} quest · ${landmark.name}`} back>
-      <Card tint={colors.white} style={{ gap: spacing.md }}>
-        <Step n={1} title="Quest accepted" state="done" />
-        <Step
-          n={2}
-          title={checkedIn ? `Checked in at ${landmark.name}` : `Get to ${landmark.name}`}
-          detail={checkedIn ? undefined : `${formatDistance(distanceM, units)} away · ~${walkingMinutes(distanceM)} min walk`}
-          state={checkedIn ? 'done' : 'current'}
-        />
-        <Step n={3} title="Capture photo evidence" detail={quest.evidence} state={checkedIn ? 'current' : 'todo'} />
-        <Step n={4} title="Verification & rewards" state="todo" />
+    <ScreenShell
+      title={quest.title}
+      subtitle={landmark.name}
+      back
+      footer={
+        <View style={{ gap: 8 }}>
+          {checkedIn ? (
+            <Button label={t('active.addEvidence')} onPress={() => navigation.navigate('Verify')} />
+          ) : (
+            <Button label={t('active.checkIn')} onPress={doCheckIn} />
+          )}
+          {!checkedIn && <Button label="Walking directions" variant="secondary" onPress={openDirections} />}
+          <Button label={t('quest.abandon')} variant="ghost" onPress={drop} />
+        </View>
+      }
+    >
+      <View style={[styles.hero, { backgroundColor: colors.sageSoft }]}>
+        <PinArt theme={quest.collectible.theme} rarity={quest.collectible.rarity} size={96} />
+      </View>
+      <MetaRow
+        items={[
+          { icon: mode.icon, label: mode.label },
+          { icon: 'walk', label: checkedIn ? 'Checked in' : `${walkingMinutes(shownDistance)} min walk` },
+          { icon: 'timer-outline', label: `${quest.durationMin} min` },
+          { icon: 'star-four-points-outline', label: `${quest.xp} XP` },
+        ]}
+      />
+
+      <Card style={{ gap: 10 }}>
+        <Text style={type.heading}>{checkedIn ? 'Your mission' : inRange ? 'You’re here' : 'Head over'}</Text>
+        {!checkedIn && (
+          <>
+            <ProgressBar fraction={inRange ? 1 : approach} label="Distance progress" />
+            <Text style={type.small}>
+              {formatDistance(shownDistance, units)} away. Check in within {formatDistance(CHECK_IN_RADIUS_M, units)}. Watch the road, not your phone.
+            </Text>
+          </>
+        )}
+        {quest.instructions.map((s, i) => (
+          <View key={i} style={styles.step}>
+            <View style={[styles.stepNum, { backgroundColor: colors.sageSoft }]}>
+              <Text style={[type.bodyStrong, { color: colors.primary }]}>{i + 1}</Text>
+            </View>
+            <Text style={[type.body, { flex: 1 }]}>{active.soloVersion && quest.soloAlternative && i === quest.instructions.length - 1 ? quest.soloAlternative : s}</Text>
+          </View>
+        ))}
+        <View style={styles.step}>
+          <MaterialCommunityIcons name="camera-outline" size={18} color={colors.primary} />
+          <Text style={[type.small, { flex: 1, color: colors.text }]}>Evidence: {quest.evidence}</Text>
+        </View>
       </Card>
 
-      {!checkedIn && (
-        <Card tint={colors.paper} style={{ gap: spacing.sm }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.sm }}>
-            <MaterialCommunityIcons name={cat.icon} size={24} color={cat.color} />
-            <Text style={[type.heading, { flex: 1 }]}>{inRange ? 'You’re here!' : 'Head over'}</Text>
-            <Text style={type.bodyStrong}>{formatDistance(distanceM, units)}</Text>
-          </View>
-          <ProgressBar fraction={inRange ? 1 : approach} color={colors.sunset} label="Distance progress" />
-          <Text style={type.small}>Check in within {formatDistance(CHECK_IN_RADIUS_M, units)} of the spot. Watch the road, not your phone.</Text>
-          <Button label={t('active.checkIn')} icon="map-marker-check-outline" variant={inRange ? 'sunset' : 'secondary'} onPress={doCheckIn} />
-          {!inRange && <Button label="Walking directions" icon="directions" variant="ghost" compact onPress={openDirections} />}
-          {!inRange && demoMode && (
-            <Button
-              label={t('active.simWalk')}
-              icon="foot-print"
-              variant="secondary"
-              compact
-              onPress={() => {
-                simulateWalkTo(landmark.id);
-                setCheckMsg('Simulated position moved next to the landmark. Now check in.');
-              }}
-            />
-          )}
-          {checkMsg && <Notice tone={checkMsg.startsWith('Simulated') ? 'demo' : 'warn'} text={checkMsg} />}
-        </Card>
+      {!checkedIn && demoMode && (
+        <Button
+          label={t('active.simWalk')}
+          variant="secondary"
+          onPress={() => {
+            simulateWalkTo(landmark.id);
+            setCheckMsg('Simulated position moved next to the landmark. Now check in.');
+          }}
+        />
       )}
-
-      {checkedIn && (
-        <Card tint={colors.butterSoft} style={{ gap: spacing.sm }}>
-          <Text style={type.heading}>Your mission</Text>
-          {quest.instructions.map((s, i) => (
-            <Text key={i} style={type.body}>
-              {i + 1}. {active.soloVersion && quest.soloAlternative && i === quest.instructions.length - 1 ? quest.soloAlternative : s}
-            </Text>
-          ))}
-          {active.soloVersion && quest.soloAlternative && <Notice icon="walk" text={`Solo version: ${quest.soloAlternative}`} />}
-          <Button label={t('active.addEvidence')} icon="camera" variant="sunset" onPress={() => navigation.navigate('Verify')} />
-        </Card>
-      )}
-
+      {checkMsg && <Notice tone={checkMsg.startsWith('Simulated') ? 'demo' : 'warn'} text={checkMsg} />}
       {quest.mode !== 'solo' && !active.soloVersion && (
-        <Notice icon="account-group" text={party ? `Playing with ${party.members.length} in ${party.name}. Party bonus applies.` : 'No party yet – you can still play solo, or form a party in the Party tab.'} />
+        <Notice icon="account-group" text={party ? `Playing with ${party.members.length} in ${party.name}.` : 'No party yet. You can still play solo, or form a party.'} />
       )}
-
-      <Button
-        label={t('quest.abandon')}
-        icon="flag-remove-outline"
-        variant="danger"
-        compact
-        onPress={() => {
-          abandonQuest();
-          navigation.goBack();
-        }}
-      />
     </ScreenShell>
   );
 }
 
 const styles = StyleSheet.create({
-  step: { flexDirection: 'row', gap: spacing.md, alignItems: 'center' },
-  dot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: colors.ink,
-    backgroundColor: colors.paperDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dotText: { fontFamily: fonts.bodyBold, color: colors.ink },
+  hero: { height: 160, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  stepNum: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
 });

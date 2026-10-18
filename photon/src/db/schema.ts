@@ -13,6 +13,9 @@ CREATE TABLE IF NOT EXISTS players (
   timezone TEXT NOT NULL,
   progress_scope TEXT NOT NULL CHECK (progress_scope IN ('demo', 'live')),
   xp INTEGER NOT NULL DEFAULT 0,
+  phone TEXT,
+  email TEXT,
+  profile_completed_at TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -143,6 +146,54 @@ CREATE TABLE IF NOT EXISTS link_tokens (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS messaging_preferences (
+  player_id TEXT PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  reminders_enabled INTEGER NOT NULL DEFAULT 0,
+  timezone TEXT NOT NULL,
+  weekdays TEXT NOT NULL DEFAULT '1,3,5',
+  local_time TEXT NOT NULL DEFAULT '16:00',
+  quiet_start TEXT NOT NULL DEFAULT '20:00',
+  quiet_end TEXT NOT NULL DEFAULT '10:00',
+  pause_until TEXT,
+  stopped_at TEXT,
+  schedule_version INTEGER NOT NULL DEFAULT 1,
+  next_due_at TEXT,
+  prompts_today TEXT,
+  prompts_today_count INTEGER NOT NULL DEFAULT 0,
+  prompts_week TEXT,
+  prompts_week_count INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS consent_events (
+  id TEXT PRIMARY KEY,
+  player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  identity_id TEXT,
+  source TEXT NOT NULL,
+  enabled INTEGER NOT NULL,
+  wording_version INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS scheduled_occurrences (
+  id TEXT PRIMARY KEY,
+  player_id TEXT NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  schedule_version INTEGER NOT NULL,
+  local_key TEXT NOT NULL,
+  status TEXT NOT NULL,
+  due_at TEXT NOT NULL,
+  created_at TEXT NOT NULL,
+  UNIQUE(player_id, local_key)
+);
+
+CREATE TABLE IF NOT EXISTS service_status (
+  id INTEGER PRIMARY KEY CHECK (id = 1),
+  provider_blocked INTEGER NOT NULL DEFAULT 0,
+  provider_block_reason TEXT,
+  updated_at TEXT
+);
+
 CREATE INDEX IF NOT EXISTS reminder_due ON reminder_jobs(status, due_at);
 CREATE INDEX IF NOT EXISTS outbox_status ON outbox_messages(status);
+CREATE INDEX IF NOT EXISTS preferences_due ON messaging_preferences(reminders_enabled, next_due_at);
 `;

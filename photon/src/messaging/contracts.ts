@@ -33,6 +33,7 @@ export interface OutboxItem {
   conversationId: string;
   text: string;
   route: MessageRoute;
+  purpose?: "reply" | "prompt" | "reminder";
 }
 
 export interface StageResult {

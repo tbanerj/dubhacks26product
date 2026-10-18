@@ -8,7 +8,7 @@ Built with React Native + Expo SDK 57 (expo 57.0.9, React Native 0.86, Expo Go),
 
 ---
 
-## Run it (no keys needed)
+## Run it
 
 ```bash
 cd thaw
@@ -16,7 +16,11 @@ npm install
 npx expo start
 ```
 
-Scan the QR code with **Expo Go** (SDK 57). Everything works without API keys, accounts, or a backend.
+Accounts, cloud saves, real parties, and global leaderboards need the Supabase values in `.env` (`EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY`). Those are public client values; row-level security protects the data. Copy them from `.env.example`.
+
+Gemini quest writing and photo checks use `EXPO_PUBLIC_GEMINI_API_KEY` in the app. Without that key, Thaw writes built-in quests and labels photo checks as simulated. After a live Gemini accept, XP is saved by the Supabase `complete_quest` function, which computes the score on the server.
+
+Scan the QR code with **Expo Go** (SDK 57). Email links use the `thaw://` scheme (Expo Go uses `exp://`). Add `thaw://**` and `exp://**` to the Supabase redirect allow list.
 
 You can also review the UI in a browser with `npx expo start --web`. react-native-maps has no web support, so the browser shows an illustrated board projection of the same quest hubs (`GameMap.web.tsx`).
 
@@ -59,8 +63,7 @@ npx expo start -c         # -c clears the cache; required after ANY .env change
 
 | Key in `.env` | Where to get it | What changes when set | How to confirm it works |
 |---|---|---|---|
-| `EXPO_PUBLIC_GEMINI_API_KEY` | [Google AI Studio → Get API key](https://aistudio.google.com/apikey) (free tier is enough) | Quests near you are written by Gemini (`EXPO_PUBLIC_GEMINI_MODEL`, default `gemini-2.5-flash`) | Tap **↻ Refresh quests** on the map. Cards show an **AI** chip, and quest detail says "Quest written by Gemini". If the call fails, a yellow note on the map says why, and built-in quests are used. |
-| `EXPO_PUBLIC_PERCEPTRON_API_KEY` | From the Perceptron team (DubHacks workshop) or their developer dashboard | Photo evidence is really analysed. Base URL `https://api.perceptron.inc/v1` and model `perceptron-mk1.5` are overridable | The verify screen's note changes from "Demo mode: verification is simulated" to "sent to Perceptron". Submit a matching photo (should pass) and an unrelated one (should fail with the model's observations). |
+| `EXPO_PUBLIC_GEMINI_API_KEY` | [Google AI Studio → Get API key](https://aistudio.google.com/apikey) (free tier is enough) | Quests are written by Gemini and photo evidence is checked by the same model (`EXPO_PUBLIC_GEMINI_MODEL`, default `gemini-3.5-flash-lite`) | Tap **↻ Refresh quests** on the map. Cards show an **AI** chip, and quest detail says "Quest written by Gemini". Submit a photo: the verify screen says it is asking Gemini. If a call fails, built-in quests or a labeled simulated photo check are used. |
 | `EXPO_PUBLIC_PHOTON_RELAY_URL` | URL of **our own** relay server (not built yet; see "Photon" below). The Photon key lives on that server, never in the app | **Share invite** also POSTs `{ "message": "..." }` to `<relay>/invites` | The party screen shows "Invite also sent through your Photon relay", or the relay's error. |
 | `EXPO_PUBLIC_OVERPASS_URL` | Leave the default unless rate-limited; alternatives are listed at wiki.openstreetmap.org/wiki/Overpass_API | Source of real nearby places when using **Use my location** | Use my location → hubs have real local names and show "· OSM" in the hub card. |
 
@@ -97,7 +100,7 @@ Do this once with **no keys** and once **with keys**. Mark each line pass or fai
 | 23 | Offline | Airplane mode → Use my location / Refresh | Fallback places/quests with an explanatory note; nothing dead-ends |
 | 24 | Settings | Toggle imperial units, prefer solo, low-mobility | Distances switch to ft/mi; social/party quests disappear; hard quests disappear |
 | 25 | Gemini live | With key: Refresh quests in two different cities | AI chips; quests specific to each place; nothing unsafe |
-| 26 | Perceptron live | With key: submit a matching and a non-matching photo | Pass and fail respectively, with observations |
+| 26 | Gemini photo check | With the Gemini key: submit a matching and a non-matching photo | Pass and fail respectively, with observations. The screen says Gemini, not a simulated check |
 | 27 | Accessibility | Turn on VoiceOver/TalkBack and the largest text size | Pins, cards and buttons are announced; text scales without overlapping |
 | 28 | Both platforms | Repeat 1, 8, 12, 16 on iOS **and** Android | Custom markers render; Android map uses the warm paper style |
 
@@ -111,7 +114,7 @@ If something fails, note the step number, the platform, and a screenshot. JS err
 
 **Must-have before any public release**
 
-1. **Backend proxy for AI keys.** Add a small server (Vercel/Cloudflare Functions, Supabase Edge Functions, etc.) with `POST /quests` → Gemini and `POST /verify` → Perceptron. Move the keys there, add per-user rate limiting, then change the URLs in `src/services/gemini.ts` and `src/services/perceptron.ts`. Remove `EXPO_PUBLIC_GEMINI_API_KEY` and `EXPO_PUBLIC_PERCEPTRON_API_KEY` from the app entirely.
+1. **Backend proxy for the Gemini key.** Add a small server (Vercel/Cloudflare Functions, Supabase Edge Functions, etc.) with `POST /quests` and `POST /verify` both calling Gemini. Move the key there, add per-user rate limiting, then change the URL in `src/services/gemini.ts`. Remove `EXPO_PUBLIC_GEMINI_API_KEY` from the app entirely.
 2. **Accounts + server-side game state.** Today XP and pins live only on the device, so anyone can tamper with them. Add auth (Supabase Auth, Firebase Auth, or Clerk) and a database with tables for players, completions, collectibles and xp_by_day. Make the server the authority: verification and the `applyCompletion` rules (`src/game/progression.ts` is pure and portable) must run server-side. The client only displays results.
 3. **Real multiplayer.** Implement `PartyService` (`src/services/photon.ts`) over a realtime backend (Supabase Realtime, Firebase, Ably, or our own WebSockets). Keep the privacy rule that only coarse proximity buckets ever reach other clients. Use the Photon agent for SMS/iMessage invites through the relay.
 4. **Trust & safety.** Add report and block for players and chat messages, chat moderation (a server-side text filter or model), an age gate (13+ or local equivalent), a Terms of Service, a privacy policy (location + camera + photo processing), and an account/data deletion flow. These are app store requirements.
@@ -141,7 +144,7 @@ If something fails, note the step number, the platform, and a screenshot. JS err
 |---|---|---|
 | Places | Saved demo places for 6 cities on 5 continents, plus "Anywhere" sample spots (labelled as samples) | **Use my location** queries **OpenStreetMap (Overpass API)** live: no key, cached 24 h, rate-limited, attributed |
 | Quests | Original local templates keyed to the *kind* of place (garden ≠ library ≠ market), time-of-day aware, deterministic IDs | **Gemini** (`generateContent`, JSON schema mode). Every AI quest is zod-validated and safety-filtered, and anything rejected is replaced by a local quest |
-| Photo verification | **Transparent mock.** The UI says it's simulated, and the photo never leaves the device | **Perceptron** chat-completions API (`POST /v1/chat/completions`, image as a data URI), with timeout, one retry and a parsed verdict |
+| Photo verification | **Transparent mock.** The UI says it's simulated, and the photo never leaves the device | **Gemini** (`generateContent` with the photo inline). A parsed verdict accepts at confidence ≥ 0.45. If the call fails, a labeled simulated accept finishes the loop |
 | Party / presence | Deterministic local lobby. Demo participants are always labelled "demo". Membership, ready states and chat work | See "Photon" below |
 | Leaderboards | Local: your real progress vs labelled demo profiles. The app never calls this a global board | (backend needed) |
 
@@ -153,14 +156,14 @@ Copy `.env.example` to `.env` and fill in only what you have:
 
 ```
 EXPO_PUBLIC_GEMINI_API_KEY=YOUR_GEMINI_API_KEY_HERE        # = GEMINI_API_KEY
-EXPO_PUBLIC_PERCEPTRON_API_KEY=YOUR_PERCEPTRON_API_KEY_HERE  # = PERCEPTRON_API_KEY
+EXPO_PUBLIC_GEMINI_MODEL=gemini-3.5-flash-lite
 EXPO_PUBLIC_PHOTON_RELAY_URL=                               # your backend, see below
 ```
 
 Placeholders (`YOUR_…_HERE`) are treated as "not configured". All env access lives in `src/config/env.ts`. **You → Integrations** shows which services are live.
 
 **Security note:** Expo inlines `EXPO_PUBLIC_*` values into the JS bundle, so anyone can extract them from a shipped app. That's acceptable for a local hackathon demo build only. For production:
-- **Gemini** and **Perceptron** need a small backend proxy that holds the keys. The service modules isolate the `fetch` call, so you only change the URL.
+- **Gemini** needs a small backend proxy that holds the key. Quest writing and photo checks both live in `src/services/gemini.ts`, so you only change that URL.
 - **OpenStreetMap Overpass** is a public, keyless API and is safe to call from the client. For scale, self-host it or use a commercial geocoder, per the OSM usage policy.
 
 ### Photon (read this)
@@ -188,7 +191,7 @@ src/
   game/                      PURE rules, no React: progression (XP, levels, streaks, daily XP,
                              idempotent applyCompletion), questSchema (zod + safety filter),
                              localQuests, questStatus/hub state, leaderboard, geo, dates
-  services/                  gemini, perceptron, photon, places (Overpass), location, storage
+  services/                  gemini (quests + photo checks), photon, places (Overpass), location, storage
   store/useGameStore.ts      Zustand + AsyncStorage persist; orchestrates services, applies game rules
   hooks/useWorld.ts          derived world view (hubs, quests in range, distances)
   components/                Button, Paper (Card/Chip/Notice/ProgressBar/EmptyState), Critter (avatar art),
@@ -212,25 +215,24 @@ Key decisions:
 ```bash
 npm run typecheck   # tsc, strict + noUncheckedIndexedAccess
 npm run lint        # eslint-config-expo (incl. React Compiler rules)
-npm test            # jest-expo: 49 tests
+npm test            # jest-expo: 56 tests
 ```
 
-The tests cover level thresholds and their inverse, streaks, daily XP pruning, idempotent completion, duplicate collectibles, party bonus, quest schema validation, unsafe-content rejection, solo-alternative enforcement, local generation for every category and region (including Unicode names), deterministic IDs, night behaviour, Gemini success/partial/malformed/HTTP-error/offline fallbacks (mocked fetch), the demo verifier's accept/reject, the party service (capacity 4, ready, chat, leave), leaderboard ranking, and a store-level end-to-end loop (accept → check-in gate → reject → complete once → persisted → reset → region switch).
+The tests cover level thresholds and their inverse, streaks, daily XP pruning, idempotent completion, duplicate collectibles, party bonus, quest schema validation, unsafe-content rejection, solo-alternative enforcement, local generation for every category and region (including Unicode names), deterministic IDs, night behaviour, Gemini success/partial/malformed/HTTP-error/offline fallbacks (mocked fetch), Gemini photo accept/reject and simulated fallback, the demo verifier's accept/reject, the party service (capacity 4, ready, chat, leave), leaderboard ranking, and a store-level end-to-end loop (accept → check-in gate → reject → complete once → persisted → reset → region switch).
 
 ## Verified vs not verified
 
-- ✅ Typecheck, lint, and all 49 tests pass.
+- ✅ Typecheck, lint, and all 56 tests pass.
 - ✅ In a browser at phone size (Expo web): the first-run card, map board, quest detail, accept, the too-far check-in message, simulated walk, check-in, photo pick and preview, simulated reject then retry, accept → reward screen, collection, leaderboard, party (create/invite/ready/chat), profile, persistence across reload, and region switching all work.
 - ⚠️ **Not run on a physical device or simulator yet.** Native map rendering (custom markers, pitch, Google map style on Android, `mutedStandard` on iOS), camera capture, GPS permission flows and haptics still need checking in Expo Go.
-- ⚠️ The live Gemini, Perceptron and Overpass paths were only exercised with mocked `fetch` (Gemini) or not at all (Perceptron, Overpass), because no keys were available. The Perceptron request format follows docs.perceptron.inc (model `perceptron-mk1.5`). Confirm it at the Perceptron workshop.
+- ⚠️ Live Gemini quest and photo calls need a device check with a real key. Unit tests mock `fetch`. Overpass was not called from this environment.
 
 ## Hackathon notes (from the DubHacks '26 Hacker Guide)
 
-- One title track, up to **3 sponsored side tracks**, unlimited non-sponsored side tracks. Our target list (Chef's Choice + SideShift + Perceptron + DubHacks NEXT + MLH Gemini/Backboard) needs trimming. Check which of these the organisers count as "sponsored" before submitting.
+- One title track, up to **3 sponsored side tracks**, unlimited non-sponsored side tracks. Our target list (Chef's Choice + SideShift + DubHacks NEXT + MLH Gemini/Backboard) needs trimming. Check which of these the organisers count as "sponsored" before submitting. Photo checks use Gemini, not a separate vision vendor.
 - **Chef's Choice** (title): creativity, games and interactive experiences, UI/UX. That's Thaw's core.
 - **SideShift – Best Startup Idea**: open to any stack, and judges favour ideas with a distribution story (creators, social, spreadability). The share-invite loop and pins as shareable souvenirs are the hooks.
-- **Perceptron**: the perception track uses their Mk/Isaac models through provided API access (localization, OCR, captioning…). `perceptron.ts` is where that plugs in.
-- **MLH Best Use of Gemini API**: `gemini.ts`. **MLH Best Use of Backboard** is a separate prize, and Backboard is **not integrated**.
+- **MLH Best Use of Gemini API**: `gemini.ts` writes quests and checks photo evidence. **MLH Best Use of Backboard** is a separate prize, and Backboard is **not integrated**.
 - **DubHacks NEXT**: listed with prizes in the guide, but its judging criteria weren't on the public guide pages. Ask an organiser.
 - **Rules**: 70/30 rule (≥70% of code written during the event), public repo linked on Devpost, **draft submission by 10:30 PM Saturday**, final submission with a **video by 10:00 AM Sunday**, and at least one team member present at in-person judging.
 

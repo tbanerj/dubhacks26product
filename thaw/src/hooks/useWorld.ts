@@ -23,6 +23,7 @@ export function useWorld() {
       regionId: st.regionId,
       manualCenter: st.manualCenter,
       worldCenter: st.worldCenter,
+      settings: st.settings,
       landmarks: st.landmarks,
       quests: st.quests,
       progress: st.progress,
@@ -34,7 +35,7 @@ export function useWorld() {
   const position = useMemo(
     () => playerPosition(s),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [s.gpsPosition, s.simulatedPosition, s.locationMode, s.regionId, s.manualCenter, s.worldCenter],
+    [s.gpsPosition, s.simulatedPosition, s.locationMode, s.regionId, s.manualCenter, s.worldCenter, s.settings.demoMode],
   );
 
   return useMemo(() => {
