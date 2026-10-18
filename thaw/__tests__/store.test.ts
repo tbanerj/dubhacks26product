@@ -2,8 +2,15 @@
  * End-to-end game loop through the store: region → discover → accept → check in →
  * verify → rewards exactly once → persistence → reset.
  */
+jest.mock('../src/services/places', () => ({
+  discoverPlaces: jest.fn(async () => ({ ok: false as const, reason: 'Map data unavailable.' })),
+}));
+
+// eslint-disable-next-line import/first
 import AsyncStorage from '@react-native-async-storage/async-storage';
+// eslint-disable-next-line import/first
 import { useGameStore, partySizeOf } from '../src/store/useGameStore';
+// eslint-disable-next-line import/first
 import type { VerificationResult } from '../src/types';
 
 const accepted: VerificationResult = { accepted: true, confidence: 1, feedback: 'ok', observations: null, source: 'demo' };
@@ -52,7 +59,7 @@ describe('game loop', () => {
     expect(res.ok).toBe(true);
     const after = useGameStore.getState();
     expect(after.progress.totalXp).toBeGreaterThan(xpBefore);
-    expect(after.progress.collectibles.length).toBe(2); // seeded pin + new one
+    expect(after.progress.collectibles.length).toBe(1);
     expect(after.activeQuest).toBeNull();
 
     // Second submission: no active quest, and re-accepting a completed quest is refused.
@@ -69,11 +76,13 @@ describe('game loop', () => {
     expect(saved.state.progress.totalXp).toBe(useGameStore.getState().progress.totalXp);
   });
 
-  it('resets the demo to its initial state', async () => {
+  it('reloads Seattle without wiping the score', async () => {
+    const xp = useGameStore.getState().progress.totalXp;
+    const completions = useGameStore.getState().progress.completions.length;
     await useGameStore.getState().resetDemo();
     const s = useGameStore.getState();
-    expect(s.progress.totalXp).toBe(140);
-    expect(s.progress.completions.length).toBe(1);
+    expect(s.progress.totalXp).toBe(xp);
+    expect(s.progress.completions.length).toBe(completions);
     expect(s.settings.demoMode).toBe(true);
     expect(s.regionId).toBe('seattle');
     expect(s.quests.length).toBeGreaterThan(0);

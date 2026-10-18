@@ -1,5 +1,5 @@
 import React from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
 import type { TabScreenProps } from '../navigation/types';
@@ -9,13 +9,24 @@ import { Card, ProgressBar, SettingsRow } from '../components/Paper';
 import { IconButton } from '../components/Button';
 import { Critter } from '../components/Critter';
 import { useTheme } from '../theme/useTheme';
+import { regionById } from '../data/regions';
 import { currentStreak, dailyXp, levelProgress } from '../game/progression';
 import { formatDate, formatNumber } from '../utils/format';
 import { t } from '../i18n/strings';
 
 export function YouScreen({ navigation }: TabScreenProps<'You'>) {
   const { colors, type } = useTheme();
-  const s = useGameStore(useShallow((st) => ({ player: st.player, progress: st.progress, syncState: st.syncState, account: st.account, demoMode: st.settings.demoMode })));
+  const s = useGameStore(
+    useShallow((st) => ({
+      player: st.player,
+      progress: st.progress,
+      syncState: st.syncState,
+      account: st.account,
+      demoMode: st.settings.demoMode,
+      regionId: st.regionId,
+    })),
+  );
+  const setDemoMode = useGameStore((st) => st.setDemoMode);
   const lp = levelProgress(s.progress.totalXp);
   const streak = currentStreak(s.progress);
   const today = dailyXp(s.progress);
@@ -36,7 +47,7 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
             {s.player.name}
           </Text>
           <Text style={type.small}>{t('profile.level', { level: lp.level })}</Text>
-          {s.account && !s.demoMode ? (
+          {s.account ? (
             <Text style={type.tiny}>{s.syncState === 'syncing' ? 'Syncing' : s.syncState === 'offline' ? 'Offline' : s.syncState === 'synced' ? 'Synced' : 'Not synced yet'}</Text>
           ) : null}
           <ProgressBar fraction={lp.fraction} label="XP progress" />
@@ -48,6 +59,26 @@ export function YouScreen({ navigation }: TabScreenProps<'You'>) {
       <Pressable onPress={() => navigation.navigate('EditAvatar')} accessibilityRole="button" accessibilityLabel="Edit avatar">
         <Text style={[type.bodyStrong, { color: colors.primary }]}>Edit avatar</Text>
       </Pressable>
+
+      <Card style={{ paddingVertical: 4 }}>
+        <SettingsRow
+          icon="flask-outline"
+          label="Demo mode"
+          hint="Stand in for GPS with a chosen city. Quests, parties, photos, and your account stay real."
+          control={
+            <Switch
+              value={s.demoMode}
+              onValueChange={(v) => void setDemoMode(v)}
+              trackColor={{ true: colors.primary, false: colors.border }}
+              thumbColor={colors.surface}
+              accessibilityLabel="Demo mode"
+            />
+          }
+        />
+        {s.demoMode ? (
+          <SettingsRow icon="map-marker-outline" label="Demo city" value={regionById(s.regionId)?.name ?? 'Seattle'} onPress={() => navigation.navigate('RegionPicker')} />
+        ) : null}
+      </Card>
 
       <View style={[styles.stats, { backgroundColor: colors.surface, borderColor: colors.border }]}>
         <Stat value={streak > 0 ? String(streak) : '0'} label="day streak" />

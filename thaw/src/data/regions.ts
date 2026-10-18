@@ -4,7 +4,7 @@
  * Coordinates are approximate public locations.
  */
 import type { DemoRegion, Landmark, LandmarkCategory, LatLng } from '../types';
-import { offsetMeters } from '../game/geo';
+import { distanceMeters, offsetMeters } from '../game/geo';
 
 export const GENERIC_REGION_ID = 'anywhere';
 
@@ -103,4 +103,19 @@ export function sampleSpotsAround(center: LatLng): Landmark[] {
 
 export function regionById(id: string | null | undefined): DemoRegion | undefined {
   return DEMO_REGIONS.find((r) => r.id === id);
+}
+
+/** Closest curated city, or null when the player is outside every metro we ship. */
+export function nearestRegion(center: LatLng, maxMeters = 40_000): DemoRegion | null {
+  let best: DemoRegion | null = null;
+  let bestD = maxMeters;
+  for (const region of DEMO_REGIONS) {
+    if (region.id === GENERIC_REGION_ID) continue;
+    const d = distanceMeters(center, region.center);
+    if (d <= bestD) {
+      best = region;
+      bestD = d;
+    }
+  }
+  return best;
 }

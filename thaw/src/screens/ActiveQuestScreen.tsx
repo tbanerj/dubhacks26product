@@ -11,7 +11,7 @@ import { PinArt } from '../components/PinArt';
 import { MODE_STYLE } from '../theme/palette';
 import { useTheme } from '../theme/useTheme';
 import { formatDistance } from '../utils/format';
-import { CHECK_IN_RADIUS_M, walkingMinutes } from '../game/geo';
+import { CHECK_IN_RADIUS_M, distanceMeters, walkingMinutes } from '../game/geo';
 import { t } from '../i18n/strings';
 
 export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>) {
@@ -20,6 +20,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   const active = useGameStore((s) => s.activeQuest);
   const units = useGameStore((s) => s.settings.units);
   const demoMode = useGameStore((s) => s.settings.demoMode);
+  const gpsPosition = useGameStore((s) => s.gpsPosition);
   const party = useGameStore((s) => s.party);
   const { checkIn, simulateWalkTo, abandonQuest } = useGameStore.getState();
   const [checkMsg, setCheckMsg] = useState<string | null>(null);
@@ -34,9 +35,10 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
   }
 
   const { quest, landmark, distanceM } = entry;
-  const inRange = distanceM <= CHECK_IN_RADIUS_M;
+  const shownDistance = !demoMode && gpsPosition ? distanceMeters(gpsPosition, landmark.coordinate) : distanceM;
+  const inRange = shownDistance <= CHECK_IN_RADIUS_M;
   const checkedIn = active.checkedIn;
-  const approach = Math.max(0, Math.min(1, 1 - (distanceM - CHECK_IN_RADIUS_M) / 1500));
+  const approach = Math.max(0, Math.min(1, 1 - (shownDistance - CHECK_IN_RADIUS_M) / 1500));
   const mode = MODE_STYLE[active.soloVersion ? 'solo' : quest.mode];
 
   const openDirections = () => {
@@ -55,7 +57,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
     const go = async () => {
       if (!useGameStore.getState().settings.demoMode) await useGameStore.getState().refreshGps();
       const res = checkIn();
-      if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? distanceM, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
+      if (!res.ok) setCheckMsg(t('active.tooFar', { distance: formatDistance(res.distanceM ?? shownDistance, units), radius: formatDistance(CHECK_IN_RADIUS_M, units) }));
       else setCheckMsg(null);
     };
     void go();
@@ -89,7 +91,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
       <MetaRow
         items={[
           { icon: mode.icon, label: mode.label },
-          { icon: 'walk', label: checkedIn ? 'Checked in' : `${walkingMinutes(distanceM)} min walk` },
+          { icon: 'walk', label: checkedIn ? 'Checked in' : `${walkingMinutes(shownDistance)} min walk` },
           { icon: 'timer-outline', label: `${quest.durationMin} min` },
           { icon: 'star-four-points-outline', label: `${quest.xp} XP` },
         ]}
@@ -101,7 +103,7 @@ export function ActiveQuestScreen({ navigation }: RootScreenProps<'ActiveQuest'>
           <>
             <ProgressBar fraction={inRange ? 1 : approach} label="Distance progress" />
             <Text style={type.small}>
-              {formatDistance(distanceM, units)} away. Check in within {formatDistance(CHECK_IN_RADIUS_M, units)}. Watch the road, not your phone.
+              {formatDistance(shownDistance, units)} away. Check in within {formatDistance(CHECK_IN_RADIUS_M, units)}. Watch the road, not your phone.
             </Text>
           </>
         )}

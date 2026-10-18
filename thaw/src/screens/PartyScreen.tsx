@@ -36,7 +36,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
       activeQuest: st.activeQuest,
       selfId: st.player.id,
       lastChatReadAt: st.lastChatReadAt,
-      demoMode: st.settings.demoMode,
+      simulated: st.connection === 'simulated',
       partyError: st.partyError,
     })),
   );
@@ -72,7 +72,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
   const errorText = s.partyError ? (PARTY_ERROR_TEXT[s.partyError as PartyErrorCode] ?? PARTY_ERROR_TEXT.unknown) : null;
 
   const share = async () => {
-    const message = s.demoMode
+    const message = s.simulated
       ? `Join my Thaw party${partyQuest ? ` for “${partyQuest.title}”` : ''}! Let's explore together – meet in a public spot.`
       : `Join my Thaw party! Open Thaw, then Party, and enter code ${party?.code ?? ''}. Let’s meet somewhere public.`;
     try {
@@ -101,7 +101,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
     setJoining(false);
   };
 
-  const statusLabel = s.demoMode ? 'Demo' : s.connection === 'connected' ? 'Live' : s.connection === 'connecting' ? 'Connecting' : 'Offline';
+  const statusLabel = s.simulated ? 'Demo' : s.connection === 'connected' ? 'Live' : s.connection === 'connecting' ? 'Connecting' : 'Offline';
 
   return (
     <ScreenShell
@@ -112,7 +112,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
         party ? (
             <IconButton icon="dots-horizontal" label="Leave party" onPress={confirmLeave} />
         ) : (
-          <Chip label={statusLabel} icon={s.demoMode ? 'flask-outline' : 'access-point'} />
+          <Chip label={statusLabel} icon={s.simulated ? 'flask-outline' : 'access-point'} />
         )
       }
     >
@@ -130,7 +130,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
             <Text style={[type.small, { textAlign: 'center' }]}>Party quests stay optional. Every social quest still has a solo version.</Text>
             <Button label={t('party.create')} onPress={a.createParty} style={{ alignSelf: 'stretch' }} />
           </Card>
-          {!s.demoMode && (
+          {!s.simulated && (
             <Card style={{ gap: 8 }}>
               <Text style={type.heading}>Join with a code</Text>
               <Text style={type.small}>Ask a friend for their 6-character party code.</Text>
@@ -149,8 +149,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
             </Card>
           )}
           {errorText ? <Notice tone="warn" text={errorText} /> : null}
-          {s.demoMode && <Text style={type.heading}>{t('party.nearby')}</Text>}
-          {!s.demoMode ? null : s.nearby.length === 0 ? (
+          {s.simulated && <Text style={type.heading}>{t('party.nearby')}</Text>}
+          {!s.simulated ? null : s.nearby.length === 0 ? (
             <EmptyState icon="account-search-outline" title="Nobody around right now." />
           ) : (
             s.nearby.map((p) => (
@@ -169,7 +169,7 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
               </Card>
             ))
           )}
-          {s.demoMode ? <Text style={[type.small, { textAlign: 'center' }]}>Distances are rough on purpose. This lobby is a local simulation, not live multiplayer.</Text> : null}
+          {s.simulated ? <Text style={[type.small, { textAlign: 'center' }]}>Distances are rough on purpose. This lobby is a local simulation, not live multiplayer.</Text> : null}
         </>
       ) : picking ? (
         <>
@@ -245,8 +245,8 @@ export function PartyScreen({ navigation }: TabScreenProps<'Party'>) {
             )}
           </Card>
 
-          {!s.demoMode && party.code ? <Notice icon="ticket-confirmation-outline" text={`Party code ${party.code}. Share it so friends can join.`} /> : null}
-          {s.demoMode && spots > 0 ? (
+          {!s.simulated && party.code ? <Notice icon="ticket-confirmation-outline" text={`Party code ${party.code}. Share it so friends can join.`} /> : null}
+          {s.simulated && spots > 0 ? (
             <>
               <Text style={type.heading}>Invite demo explorers</Text>
               {s.nearby

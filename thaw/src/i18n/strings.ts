@@ -92,7 +92,7 @@ const en = {
   'profile.level': 'Level {level}',
   'profile.streak': '{n}-day streak',
   'profile.reset': 'Reset demo',
-  'profile.resetConfirm': 'This clears your progress and returns Thaw to its first-launch state.',
+  'profile.resetConfirm': 'This reloads Seattle and clears the saved map cache. Your score stays.',
 
   'demo.badge': 'Demo mode',
   'common.cancel': 'Cancel',

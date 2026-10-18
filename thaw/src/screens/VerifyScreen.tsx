@@ -23,6 +23,7 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
   const world = useWorld();
   const active = useGameStore((s) => s.activeQuest);
   const demoMode = useGameStore((s) => s.settings.demoMode);
+  const account = useGameStore((s) => s.account);
   const completeActiveQuest = useGameStore((s) => s.completeActiveQuest);
   const recordLiveReward = useGameStore((s) => s.recordLiveReward);
   const setPendingEvidenceUri = useGameStore((s) => s.setPendingEvidenceUri);
@@ -88,7 +89,7 @@ export function VerifyScreen({ navigation }: RootScreenProps<'Verify'>) {
         setPhase({ kind: 'error', message: res.result.feedback });
         return;
       }
-      const done = demoMode ? completeActiveQuest(res.result) : await recordLiveReward(res.result);
+      const done = account && res.result.source === 'gemini' ? await recordLiveReward(res.result) : completeActiveQuest(res.result);
       if (done.ok) {
         haptic.success();
         setPendingEvidenceUri(image.uri);

@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Platform, Pressable, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Switch, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useShallow } from 'zustand/react/shallow';
@@ -18,6 +18,7 @@ import { regionById } from '../data/regions';
 import { tabBarOffset } from '../navigation/TabBar';
 import { t } from '../i18n/strings';
 import { watchPosition } from '../services/location';
+import { distanceMeters } from '../game/geo';
 
 const SHEET_COLLAPSED = 236;
 
@@ -56,23 +57,36 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   const [focus, setFocus] = useState<{ coordinate: { latitude: number; longitude: number }; token: number } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
   const [gpsError, setGpsError] = useState<string | null>(null);
-  const [noteDismissed, setNoteDismissed] = useState(false);
+  const [hiddenStatus, setHiddenStatus] = useState<string | null>(null);
 
   useEffect(() => {
     const s = useGameStore.getState();
-    if (s.landmarks.length > 0 && (s.settings.demoMode || s.locationMode === 'gps')) {
+    if (s.landmarks.length > 0 && s.quests.length > 0 && s.worldStatus !== 'loading') {
       useGameStore.setState({ worldStatus: 'ready' });
-      if (s.locationMode === 'gps') void s.refreshGps();
-      return;
     }
-    if (s.worldStatus === 'idle' || s.worldStatus === 'needs-location') void s.startWorld();
+    void s.reloadWorld();
   }, []);
+
+  const lastCoord = useRef(world.position.coordinate);
+  useEffect(() => {
+    const prev = lastCoord.current;
+    const next = world.position.coordinate;
+    lastCoord.current = next;
+    if (distanceMeters(prev, next) > 350) setFocus({ coordinate: next, token: Date.now() });
+  }, [world.position.coordinate]);
 
   useEffect(() => {
     if (st.locationMode !== 'gps' || st.permission !== 'granted') return;
     let stop: (() => void) | null = null;
     let cancelled = false;
-    void watchPosition((c) => useGameStore.setState({ gpsPosition: c })).then((unsub) => {
+    void watchPosition((c) => {
+      const prev = useGameStore.getState().gpsPosition;
+      useGameStore.setState({ gpsPosition: c });
+      const state = useGameStore.getState();
+      if (state.locationMode !== 'gps' || state.worldStatus === 'loading' || !prev) return;
+      if (distanceMeters(prev, c) < 800) return;
+      void state.reloadWorld();
+    }).then((unsub) => {
       if (cancelled) unsub();
       else stop = unsub;
     });
@@ -124,8 +138,9 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   const preview = selectedEntries.find((e) => e.status !== 'completed') ?? selectedEntries[0] ?? world.active ?? world.entries.find((e) => e.status !== 'completed') ?? world.entries[0] ?? null;
   const region = regionById(st.regionId);
   const bar = tabBarOffset(insets.bottom);
-  const posLabel =
-    world.position.kind === 'gps'
+  const posLabel = st.demoMode
+    ? `Demo · ${region?.name ?? 'Seattle'}`
+    : world.position.kind === 'gps'
       ? t('explore.gps')
       : world.position.kind === 'simulated'
         ? t('explore.simulated')
@@ -133,7 +148,8 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
           ? t('explore.manual')
           : `${region?.name ?? 'Sample'} · ${t('explore.sampleLocation')}`;
 
-  const status = !noteDismissed ? dataStatus(st, world.position.kind) : null;
+  const status = dataStatus(st, world.position.kind);
+  const visibleStatus = status && status.text !== hiddenStatus ? status : null;
 
   const openPreview = () => {
     if (!preview) return;
@@ -144,7 +160,11 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
   return (
     <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <GameMap
-        player={{ coordinate: world.position.coordinate, hue: st.hue, label: world.position.kind === 'gps' ? 'You' : world.position.kind === 'simulated' ? 'You (sim)' : 'You (sample)' }}
+        player={{
+          coordinate: world.position.coordinate,
+          hue: st.hue,
+          label: st.demoMode ? 'You (demo)' : world.position.kind === 'gps' ? 'You' : world.position.kind === 'simulated' ? 'You (sim)' : world.position.kind === 'manual' ? 'Chosen spot' : 'You (sample)',
+        }}
         hubs={world.hubs}
         selectedId={selectedId ?? preview?.landmark.id ?? null}
         onSelectHub={(id) => {
@@ -152,7 +172,7 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
           const lm = world.lmById.get(id);
           if (lm) setFocus({ coordinate: lm.coordinate, token: Date.now() });
         }}
-        onLongPress={st.demoMode ? onLongPress : undefined}
+        onLongPress={onLongPress}
         recenterToken={recenterToken}
         focus={focus}
       />
@@ -165,9 +185,9 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             </GlassSurface>
           </Pressable>
           <Pressable
-            onPress={() => (st.demoMode ? navigation.navigate('RegionPicker') : void requestMyLocation())}
+            onPress={() => navigation.navigate('RegionPicker')}
             accessibilityRole="button"
-            accessibilityLabel={st.demoMode ? `Location: ${posLabel}. Change demo region.` : `Location: ${posLabel}. Refresh my location.`}
+            accessibilityLabel={`Location: ${posLabel}. Change where you explore.`}
             style={{ flexShrink: 1 }}
           >
             <GlassSurface style={styles.locChip}>
@@ -179,9 +199,9 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             </GlassSurface>
           </Pressable>
         </View>
-        {status && (
-          <Pressable onPress={() => setNoteDismissed(true)} accessibilityRole="button" accessibilityLabel={`${status.text}. Dismiss`}>
-            <Notice tone={status.tone} icon={status.tone === 'demo' ? 'flask-outline' : 'information-outline'} text={status.text} />
+        {visibleStatus && (
+          <Pressable onPress={() => setHiddenStatus(visibleStatus.text)} accessibilityRole="button" accessibilityLabel={`${visibleStatus.text}. Dismiss`}>
+            <Notice tone={visibleStatus.tone} icon={visibleStatus.tone === 'demo' ? 'flask-outline' : 'information-outline'} text={visibleStatus.text} />
           </Pressable>
         )}
         {gpsError && (
@@ -204,18 +224,22 @@ export function ExploreScreen({ navigation, route }: TabScreenProps<'Explore'>) 
             }}
           />
         )}
-        {st.demoMode && st.locationMode !== 'gps' && <IconButton icon="navigation-variant-outline" label={t('onboard.useLocation')} glass onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
+        {st.locationMode !== 'gps' && <IconButton icon="navigation-variant-outline" label={t('onboard.useLocation')} glass onPress={() => void requestMyLocation()} disabled={gpsBusy} />}
         <IconButton icon="refresh" label="Refresh quests" glass onPress={() => void actions.reloadWorld()} />
       </View>
 
       <Text style={[styles.attribution, type.tiny, { color: colors.textSecondary, bottom: bar + SHEET_COLLAPSED - 28, backgroundColor: colors.surface }]}>
-        {st.demoMode && st.locationMode === 'region' ? 'Sample places · ' : ''}
+        {st.demoMode && st.locationMode !== 'gps' ? 'Demo location · ' : ''}
         {t('explore.attribution')}
       </Text>
 
       <View style={[styles.sheetWrap, { bottom: bar - 8 }]} pointerEvents="box-none">
         <BottomSheet collapsed={SHEET_COLLAPSED} expanded={Math.min(Math.round(height * 0.62), 560)} peek={sheetPeek()}>
-          <ScrollView contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 10 }} keyboardShouldPersistTaps="handled">
+          <ScrollView
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 20, gap: 10 }}
+            keyboardShouldPersistTaps="handled"
+            refreshControl={<RefreshControl refreshing={st.worldStatus === 'loading'} onRefresh={() => void actions.reloadWorld()} tintColor={colors.primary} />}
+          >
             <View style={styles.filters}>
               <Filter label="Solo quests" value={st.preferSolo} onChange={(v) => actions.updateSettings({ preferSolo: v })} />
               <Filter label="Shorter walks" value={st.mobilityFriendly} onChange={(v) => actions.updateSettings({ mobilityFriendly: v })} />
@@ -273,13 +297,14 @@ function Filter({ label, value, onChange }: { label: string; value: boolean; onC
 }
 
 function dataStatus(
-  st: { worldStatus: string; worldNote: string | null; locationMode: string; questSource: string },
+  st: { worldStatus: string; worldNote: string | null; locationMode: string; questSource: string; demoMode: boolean },
   kind: string,
 ): { text: string; tone: 'info' | 'warn' | 'demo' } | null {
-  if (st.worldStatus === 'error') return { text: 'Couldn’t refresh this area. Pull the quest list or try again.', tone: 'warn' };
+  if (st.worldStatus === 'error') return { text: 'Couldn’t refresh this area. Tap refresh or pull the quest list.', tone: 'warn' };
   if (st.worldNote) return { text: st.worldNote, tone: st.worldNote.startsWith('Showing saved places') ? 'info' : 'warn' };
+  if (st.demoMode && kind !== 'gps') return { text: 'Demo location. Quests, parties, and your account are live.', tone: 'demo' };
   if (kind === 'simulated') return { text: 'Simulated position', tone: 'demo' };
-  if (st.locationMode === 'region' || kind === 'sample') return { text: 'Sample places', tone: 'demo' };
+  if ((st.locationMode === 'region' || kind === 'sample') && st.questSource === 'local') return { text: 'Sample places', tone: 'demo' };
   if (st.questSource === 'local') return { text: 'Built-in quests', tone: 'demo' };
   if (st.questSource === 'mixed') return { text: 'Some quests are built-in', tone: 'demo' };
   return null;
@@ -304,16 +329,16 @@ function LocationGate({ permission, note, busy, onEnable }: { permission: string
 
 const styles = StyleSheet.create({
   root: { flex: 1 },
-  top: { position: 'absolute', left: 0, right: 72, gap: 8 },
+  top: { position: 'absolute', left: 0, right: 72, gap: 8, zIndex: 2, elevation: 4 },
   topRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   avatar: { width: 48, height: 48, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
   locChip: { flexDirection: 'row', alignItems: 'center', gap: 4, minHeight: 44, maxWidth: 240, paddingHorizontal: 12, borderRadius: 22 },
-  controls: { position: 'absolute', right: 16, gap: 8 },
+  controls: { position: 'absolute', right: 16, gap: 8, zIndex: 2, elevation: 4 },
   attribution: { position: 'absolute', left: 16, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, overflow: 'hidden', maxWidth: '70%' },
-  sheetWrap: { position: 'absolute', left: 12, right: 12 },
+  sheetWrap: { position: 'absolute', left: 12, right: 12, zIndex: 3, elevation: 6 },
   previewPad: { paddingHorizontal: 16, paddingBottom: 12 },
   filters: { flexDirection: 'row', justifyContent: 'space-between', gap: 12 },
   filter: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', minHeight: 44 },
-  scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(18,24,21,0.45)', justifyContent: 'flex-end', padding: 16 },
+  scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(18,24,21,0.45)', justifyContent: 'flex-end', padding: 16, zIndex: 5, elevation: 8 },
   onboard: { borderRadius: 24, borderWidth: StyleSheet.hairlineWidth, padding: 20, gap: 10, alignItems: 'stretch' },
 });

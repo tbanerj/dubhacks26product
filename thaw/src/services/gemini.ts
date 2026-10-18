@@ -143,7 +143,7 @@ async function callGemini(req: QuestRequest, signal: AbortSignal): Promise<unkno
         responseMimeType: 'application/json',
         responseSchema: RESPONSE_SCHEMA,
         temperature: 0.9,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
       },
     }),
   });

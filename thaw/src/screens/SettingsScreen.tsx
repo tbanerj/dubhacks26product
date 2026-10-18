@@ -121,7 +121,7 @@ export function SettingsScreen(_props: RootScreenProps<'Settings'>) {
         <SettingsRow
           icon="flask-outline"
           label="Demo mode"
-          hint="Sample cities and simulated rewards. Nothing here is saved to your account."
+          hint="Stand in for GPS with Seattle. Quests, parties, photos, and your account stay real."
           control={<Switch value={settings.demoMode} onValueChange={(v) => void setDemoMode(v)} trackColor={{ true: colors.primary, false: colors.border }} thumbColor={colors.surface} accessibilityLabel="Demo mode" />}
         />
       </Card>

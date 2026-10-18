@@ -20,18 +20,17 @@ export function LeaderboardScreen(_props: RootScreenProps<'Leaderboard'>) {
   const player = useGameStore((s) => s.player);
   const progress = useGameStore((s) => s.progress);
   const account = useGameStore((s) => s.account);
-  const demoMode = useGameStore((s) => s.settings.demoMode);
   const [range, setRange] = useState<Range>('today');
   const [metric, setMetric] = useState<Metric>('xp');
   const [global, setGlobal] = useState<{ status: 'idle' | 'loading' | 'ready' | 'error'; rows: BoardRow[] }>({ status: 'idle', rows: [] });
 
   const kind: BoardKind = metric === 'quests' ? 'quests' : metric === 'places' ? 'landmarks' : range === 'today' ? 'daily' : 'allTime';
-  const isGlobal = !!account && !demoMode;
+  const isGlobal = !!account;
   const localRows = useMemo(() => buildLeaderboard(kind, player, progress), [kind, player, progress]);
   const unit = metric === 'quests' ? 'quest' : metric === 'places' ? 'place' : 'XP';
 
   const load = useCallback(async () => {
-    if (!account || demoMode) return;
+    if (!account) return;
     setGlobal((g) => ({ ...g, status: 'loading' }));
     const res = await fetchGlobalLeaderboard(kind, 50);
     if (!res.ok) {
@@ -42,7 +41,7 @@ export function LeaderboardScreen(_props: RootScreenProps<'Leaderboard'>) {
       status: 'ready',
       rows: res.data.rows.map((row) => toBoardRow(row)),
     });
-  }, [account, demoMode, kind]);
+  }, [account, kind]);
 
   useEffect(() => {
     if (!isGlobal) return;

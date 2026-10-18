@@ -6,8 +6,8 @@
  *  - Real (default): signed-in account, real GPS, OpenStreetMap places, in-app Gemini
  *    photo checks, real parties, global leaderboards. Rewards are recorded by
  *    `complete_quest` after Gemini accepts the photo.
- *  - Demo (Settings): an isolated local sandbox. Demo XP never touches the account
- *    or the global boards.
+ *  - Demo location (You tab): the player stands in a chosen city instead of using GPS.
+ *    Quests, photos, parties, leaderboards, and the signed-in account stay live.
  */
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
@@ -29,10 +29,11 @@ import type {
   VerificationResult,
 } from '../types';
 import { zustandStorage, clearCache } from '../services/storage';
-import { DEMO_REGIONS, GENERIC_REGION_ID, regionById, sampleSpotsAround, seededLandmarks } from '../data/regions';
+import { DEMO_REGIONS, GENERIC_REGION_ID, nearestRegion, regionById, sampleSpotsAround, seededLandmarks } from '../data/regions';
 import { localDayKey, shiftDayKey } from '../game/dates';
 import { applyCompletion, levelForXp } from '../game/progression';
 import { CHECK_IN_RADIUS_M, distanceMeters, isValidCoordinate, offsetMeters } from '../game/geo';
+import { generateLocalQuests } from '../game/localQuests';
 import type { ActiveQuest } from '../game/questStatus';
 import { discoverPlaces } from '../services/places';
 import { generateQuests } from '../services/gemini';
@@ -52,7 +53,7 @@ export interface Settings {
   units: UnitSystem;
   preferSolo: boolean;
   mobilityFriendly: boolean;
-  /** Opt-in sandbox. Off by default so a signed-in player uses real GPS and the server. */
+  /** Opt-in location stand-in. Off by default so a signed-in player uses real GPS. */
   demoMode: boolean;
   /** System, light, or dark. Stays on this device. */
   appearance: AppearancePreference;
@@ -132,7 +133,7 @@ interface Actions {
   simulateWalkTo(landmarkId: string): void;
   clearSimulatedPosition(): void;
   checkIn(): { ok: boolean; distanceM: number | null };
-  /** Demo sandbox only: local reward. */
+  /** Local reward when Gemini is not checking the photo. */
   completeActiveQuest(verification: VerificationResult): CompleteResult;
   /** Signed-in play: Gemini already accepted; record the reward on the server. */
   recordLiveReward(verification: VerificationResult): Promise<CompleteResult>;
@@ -165,7 +166,7 @@ export function emptyProgress(): Progress {
   return { totalXp: 0, xpByDay: {}, streak: 0, lastActiveDay: null, completions: [], visitedLandmarkIds: [], collectibles: [] };
 }
 
-/** Starting point for the Demo sandbox (only ever shown with Demo mode on). */
+/** Legacy demo starting score. New demo sessions keep the signed-in progress instead. */
 export function demoSeedProgress(now = new Date()): Progress {
   const yesterday = shiftDayKey(localDayKey(now), -1);
   const at = new Date(now.getTime() - 86_400_000).toISOString();
@@ -239,8 +240,9 @@ const WORLD_RESET = {
 export type PositionKind = 'gps' | 'simulated' | 'sample' | 'manual' | 'none';
 
 /**
- * Where the player is for game purposes. In real mode this is only real GPS.
- * Simulated, sample, and manual positions exist only in Demo mode.
+ * Where the map and quest list are centered. A chosen city or a long-pressed
+ * point wins over GPS so browsing another area actually moves the game.
+ * Simulated walking stays in Demo mode. Live check-in still uses real GPS.
  */
 export function playerPosition(
   s: Pick<GameState, 'gpsPosition' | 'simulatedPosition' | 'locationMode' | 'regionId' | 'manualCenter'> & {
@@ -249,13 +251,17 @@ export function playerPosition(
   },
 ): { coordinate: LatLng; kind: PositionKind } {
   const demo = s.settings?.demoMode ?? false;
-  if (!demo) {
-    return s.gpsPosition ? { coordinate: s.gpsPosition, kind: 'gps' } : { coordinate: { latitude: 0, longitude: 0 }, kind: 'none' };
-  }
-  if (s.simulatedPosition) return { coordinate: s.simulatedPosition, kind: 'simulated' };
-  if (s.locationMode === 'gps' && s.gpsPosition) return { coordinate: s.gpsPosition, kind: 'gps' };
+  if (demo && s.simulatedPosition) return { coordinate: s.simulatedPosition, kind: 'simulated' };
   if (s.locationMode === 'manual' && s.manualCenter) return { coordinate: s.manualCenter, kind: 'manual' };
-  if (s.regionId === GENERIC_REGION_ID && s.worldCenter) return { coordinate: s.worldCenter, kind: 'sample' };
+  if (s.locationMode === 'region') {
+    if (s.regionId === GENERIC_REGION_ID && s.worldCenter && isValidCoordinate(s.worldCenter)) {
+      return { coordinate: s.worldCenter, kind: 'sample' };
+    }
+    const region = regionById(s.regionId) ?? DEMO_REGIONS[0]!;
+    return { coordinate: region.center, kind: 'sample' };
+  }
+  if (s.gpsPosition) return { coordinate: s.gpsPosition, kind: 'gps' };
+  if (!demo) return { coordinate: { latitude: 0, longitude: 0 }, kind: 'none' };
   const region = regionById(s.regionId) ?? DEMO_REGIONS[0]!;
   return { coordinate: region.center, kind: 'sample' };
 }
@@ -305,32 +311,34 @@ export const useGameStore = create<GameState>()(
         );
       };
 
-      const loadWorld = async (center: LatLng, mode: LocationMode, regionId: string): Promise<void> => {
+      const loadWorld = async (center: LatLng, mode: LocationMode, regionId: string, force = false): Promise<void> => {
         const requestId = ++worldRequestId;
-        const demo = get().settings.demoMode;
         set({ worldStatus: 'loading', worldNote: null });
         const region = regionById(regionId);
 
         let landmarks: Landmark[] = [];
         let note: string | null = null;
 
-        if (demo && mode === 'region') {
-          landmarks = regionId === GENERIC_REGION_ID ? sampleSpotsAround(center) : seededLandmarks(regionId);
+        const curated = (): { landmarks: Landmark[]; note: string } => {
+          const backupId = mode === 'region' && regionId !== GENERIC_REGION_ID ? regionId : nearestRegion(center)?.id;
+          const backup = backupId ? seededLandmarks(backupId) : [];
+          if (backup.length > 0) return { landmarks: backup, note: 'Live map data is unavailable. Showing saved public places nearby.' };
+          return { landmarks: sampleSpotsAround(center), note: 'Live map data is unavailable. Showing sample spots so you can still play.' };
+        };
+
+        if (mode === 'region' && regionId === GENERIC_REGION_ID) {
+          landmarks = sampleSpotsAround(center);
+          note = 'Sample spots around this point, not live map data.';
         } else {
-          const res = await discoverPlaces(center);
+          const res = await discoverPlaces(center, 1_500, { force });
           if (requestId !== worldRequestId) return;
-          if (!res.ok) {
-            if (demo) {
-              landmarks = sampleSpotsAround(center);
-              note = `${res.reason} Demo mode is showing sample spots.`;
-            } else {
-              set({ worldStatus: 'error', worldNote: `${res.reason} Check your connection and try again.` });
-              return;
-            }
-          } else {
+          if (res.ok && res.landmarks.length > 0) {
             landmarks = res.landmarks;
             if (res.cached) note = 'Showing saved places from your last visit.';
-            if (landmarks.length === 0) note = 'No mapped public places within 1.5 km yet. Try a park, library or town square nearby.';
+          } else {
+            const fallback = curated();
+            landmarks = fallback.landmarks;
+            note = res.ok ? 'No mapped public places within 1.5 km yet. Showing saved spots nearby.' : fallback.note;
           }
         }
 
@@ -339,27 +347,40 @@ export const useGameStore = create<GameState>()(
         const activeLandmark = active ? prev.landmarks.find((l) => l.id === active.landmarkId) : undefined;
         if (activeLandmark && !landmarks.some((l) => l.id === activeLandmark.id)) landmarks = [activeLandmark, ...landmarks];
 
-        const batch = await generateQuests({
-          landmarks,
-          playerPosition: center,
-          localeHint: (demo ? region?.localeHint : null) ?? deviceLocale(),
-          regionName: demo && mode === 'region' ? (region?.name ?? null) : null,
-          partySize: partySizeOf(prev.party),
-          preferSolo: prev.settings.preferSolo,
-          mobilityFriendly: prev.settings.mobilityFriendly,
-        });
-        if (requestId !== worldRequestId) return;
-        let quests = batch.quests;
-        if (active && !quests.some((q) => q.id === active.id)) quests = [active, ...quests];
+        try {
+          const batch = await generateQuests({
+            landmarks,
+            playerPosition: center,
+            localeHint: (mode === 'region' ? region?.localeHint : null) ?? deviceLocale(),
+            regionName: mode === 'region' ? (region?.name ?? null) : null,
+            partySize: partySizeOf(prev.party),
+            preferSolo: prev.settings.preferSolo,
+            mobilityFriendly: prev.settings.mobilityFriendly,
+          });
+          if (requestId !== worldRequestId) return;
+          let quests = batch.quests;
+          if (active && !quests.some((q) => q.id === active.id)) quests = [active, ...quests];
 
-        set({
-          worldCenter: center,
-          landmarks,
-          quests,
-          questSource: batch.source,
-          worldStatus: 'ready',
-          worldNote: [note, batch.note].filter(Boolean).join(' ') || null,
-        });
+          set({
+            worldCenter: center,
+            landmarks,
+            quests,
+            questSource: batch.source,
+            worldStatus: 'ready',
+            worldNote: [note, batch.note].filter(Boolean).join(' ') || null,
+          });
+        } catch (e) {
+          if (requestId !== worldRequestId) return;
+          const reason = e instanceof Error ? e.message : 'Couldn’t refresh this area.';
+          set({
+            worldCenter: center,
+            landmarks,
+            quests: generateLocalQuests(landmarks),
+            questSource: 'local',
+            worldStatus: 'ready',
+            worldNote: `${reason} Showing built-in quests instead.`,
+          });
+        }
       };
 
       const selfInfo = () => {
@@ -381,7 +402,7 @@ export const useGameStore = create<GameState>()(
 
         markHydrated: () => {
           set({ hydrated: true });
-          bindParty(get().settings.demoMode ? simulatedParty : realParty);
+          bindParty(realParty);
         },
 
         setPlayerName: (name) => {
@@ -389,13 +410,13 @@ export const useGameStore = create<GameState>()(
           if (!clean) return;
           set((s) => ({ player: { ...s.player, name: clean } }));
           const acct = get().account;
-          if (acct && !get().settings.demoMode) void updateCloudProfile(acct.userId, { displayName: clean });
+          if (acct) void updateCloudProfile(acct.userId, { displayName: clean });
         },
         setAvatarHue: (hue) => {
           const h = ((Math.round(hue) % 360) + 360) % 360;
           set((s) => ({ player: { ...s.player, avatarHue: h } }));
           const acct = get().account;
-          if (acct && !get().settings.demoMode) void updateCloudProfile(acct.userId, { avatarHue: h });
+          if (acct) void updateCloudProfile(acct.userId, { avatarHue: h });
         },
         updateSettings: (patch) => {
           const before = get().settings;
@@ -412,30 +433,21 @@ export const useGameStore = create<GameState>()(
           const s = get();
           if (s.settings.demoMode === on) return;
           worldRequestId++;
-          activeParty.leaveParty();
-          const nextProgress = on ? (s.stashedProgress ?? demoSeedProgress()) : (s.stashedProgress ?? emptyProgress());
           set({
             settings: { ...s.settings, demoMode: on },
-            stashedProgress: s.progress,
-            progress: nextProgress,
             ...WORLD_RESET,
             locationMode: on ? 'region' : 'gps',
+            regionId: on ? 'seattle' : s.regionId,
+            simulatedPosition: null,
             lastReward: null,
             pendingEvidenceUri: null,
           });
-          bindParty(on ? simulatedParty : realParty);
-          get().connectParty();
-          if (!on) void get().pullCloud();
           await get().startWorld();
         },
 
         startWorld: async () => {
           const s = get();
           if (s.settings.demoMode) {
-            if (s.locationMode === 'gps' && s.permission === 'granted') {
-              await get().enableGps();
-              return;
-            }
             await get().setRegion(s.regionId || 'seattle');
             return;
           }
@@ -450,6 +462,10 @@ export const useGameStore = create<GameState>()(
         },
 
         enableGps: async () => {
+          if (get().settings.demoMode) {
+            await get().setDemoMode(false);
+            return { ok: get().locationMode === 'gps' };
+          }
           const perm = await LocationService.requestPermission();
           set({ permission: perm });
           if (perm !== 'granted') {
@@ -461,8 +477,8 @@ export const useGameStore = create<GameState>()(
             if (!get().settings.demoMode) set({ worldStatus: 'needs-location', worldNote: fix.reason });
             return { ok: false, reason: fix.reason };
           }
-          set({ gpsPosition: fix.coordinate, locationMode: 'gps', simulatedPosition: null });
-          await loadWorld(fix.coordinate, 'gps', get().regionId);
+          set({ gpsPosition: fix.coordinate, locationMode: 'gps', simulatedPosition: null, manualCenter: null });
+          await loadWorld(fix.coordinate, 'gps', get().regionId, true);
           return { ok: true };
         },
 
@@ -475,31 +491,56 @@ export const useGameStore = create<GameState>()(
         },
 
         setRegion: async (regionId) => {
-          if (!get().settings.demoMode) return;
           const region = regionById(regionId);
           if (!region) return;
           const s = get();
-          const center = regionId === GENERIC_REGION_ID ? playerPosition({ ...s, simulatedPosition: null }).coordinate : region.center;
+          const here = s.gpsPosition ?? s.manualCenter ?? s.worldCenter;
+          const center =
+            regionId === GENERIC_REGION_ID && here && isValidCoordinate(here) && (here.latitude !== 0 || here.longitude !== 0) ? here : region.center;
           set({ regionId, locationMode: 'region', simulatedPosition: null, manualCenter: null, worldCenter: center });
-          await loadWorld(center, 'region', regionId);
+          await loadWorld(center, 'region', regionId, true);
         },
 
         setManualCenter: async (center) => {
-          if (!get().settings.demoMode || !isValidCoordinate(center)) return;
-          set({ manualCenter: center, locationMode: 'manual', simulatedPosition: null });
-          await loadWorld(center, 'manual', get().regionId);
+          if (!isValidCoordinate(center)) return;
+          set({ manualCenter: center, locationMode: 'manual', simulatedPosition: null, worldCenter: center });
+          await loadWorld(center, 'manual', get().regionId, true);
         },
 
         reloadWorld: async () => {
           const s = get();
-          if (!s.settings.demoMode) {
-            if (s.gpsPosition) await loadWorld(s.gpsPosition, 'gps', s.regionId);
-            else await get().startWorld();
+          set({ worldStatus: 'loading', worldNote: null });
+          if (s.locationMode === 'gps') {
+            const perm = await LocationService.getPermissionState();
+            set({ permission: perm });
+            if (perm === 'granted') {
+              const fix = await LocationService.getCurrentFix();
+              if (fix.ok) {
+                set({ gpsPosition: fix.coordinate });
+                await loadWorld(fix.coordinate, 'gps', get().regionId, true);
+                return;
+              }
+            }
+            const known = get().gpsPosition;
+            if (known) {
+              await loadWorld(known, 'gps', get().regionId, true);
+              return;
+            }
+            await get().startWorld();
             return;
           }
-          const pos = playerPosition({ ...s, simulatedPosition: null });
-          const center = s.locationMode === 'gps' ? pos.coordinate : (s.worldCenter ?? pos.coordinate);
-          await loadWorld(center, s.locationMode, s.regionId);
+          const region = regionById(s.regionId);
+          const center =
+            s.locationMode === 'manual' && s.manualCenter
+              ? s.manualCenter
+              : s.regionId === GENERIC_REGION_ID
+                ? (s.worldCenter ?? region?.center)
+                : region?.center;
+          if (!center || !isValidCoordinate(center) || (center.latitude === 0 && center.longitude === 0)) {
+            await get().startWorld();
+            return;
+          }
+          await loadWorld(center, s.locationMode, s.regionId, true);
         },
 
         markSeen: (questIds) => {
@@ -540,7 +581,8 @@ export const useGameStore = create<GameState>()(
           const quest = active ? s.quests.find((q) => q.id === active.questId) : undefined;
           const lm = quest ? s.landmarks.find((l) => l.id === quest.landmarkId) : undefined;
           if (!active || !lm) return { ok: false, distanceM: null };
-          const pos = playerPosition(s);
+          // Browsing another city moves the map, but a live reward still requires being there.
+          const pos = s.settings.demoMode ? playerPosition(s) : s.gpsPosition ? { coordinate: s.gpsPosition, kind: 'gps' as const } : { coordinate: { latitude: 0, longitude: 0 }, kind: 'none' as const };
           if (pos.kind === 'none') return { ok: false, distanceM: null };
           const d = distanceMeters(pos.coordinate, lm.coordinate);
           if (d > CHECK_IN_RADIUS_M) return { ok: false, distanceM: d };
@@ -570,7 +612,7 @@ export const useGameStore = create<GameState>()(
 
         recordLiveReward: async (verification) => {
           const s = get();
-          if (s.settings.demoMode || !s.account) return { ok: false, reason: 'not-demo' };
+          if (!s.account) return { ok: false, reason: 'not-demo' };
           const active = s.activeQuest;
           if (!active) return { ok: false, reason: 'no-active-quest' };
           if (!verification.accepted || verification.source !== 'gemini') return { ok: false, reason: 'not-accepted' };
@@ -673,7 +715,7 @@ export const useGameStore = create<GameState>()(
           }
           const s = get();
           set({
-            ...(s.settings.demoMode ? { stashedProgress: res.data.progress } : { progress: res.data.progress }),
+            progress: res.data.progress,
             player: { ...s.player, id: acct.userId, name: res.data.profile.displayName, avatarHue: res.data.profile.avatarHue },
             onboarding: res.data.profile.onboarded ? 'done' : 'needed',
             syncState: 'synced',
@@ -700,14 +742,11 @@ export const useGameStore = create<GameState>()(
 
         resetDemo: async () => {
           if (!get().settings.demoMode) return;
-          simulatedParty.leaveParty();
           await clearCache();
           worldRequestId++;
           set({
-            progress: demoSeedProgress(),
             ...WORLD_RESET,
-            seenQuestIds: [],
-            seenCollectibleIds: ['pin:demo-home:neighborhood'],
+            simulatedPosition: null,
             lastReward: null,
             pendingEvidenceUri: null,
             regionId: 'seattle',
