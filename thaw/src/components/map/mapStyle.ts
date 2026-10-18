@@ -4,9 +4,9 @@
  * Apple Maps (iOS default in Expo Go) ignores this; there we use `mutedStandard`.
  */
 export const PAPER_MAP_STYLE = [
-  { elementType: 'geometry', stylers: [{ color: '#f6ead2' }] },
-  { elementType: 'labels.text.fill', stylers: [{ color: '#5e6656' }] },
-  { elementType: 'labels.text.stroke', stylers: [{ color: '#fff7e8' }] },
+  { elementType: 'geometry', stylers: [{ color: '#e7efe6' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#5c675f' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#f8f8f3' }] },
   { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#c9b48c' }] },
   { featureType: 'landscape.man_made', elementType: 'geometry', stylers: [{ color: '#efe0c3' }] },
   { featureType: 'landscape.natural', elementType: 'geometry', stylers: [{ color: '#eadcbc' }] },

@@ -5,7 +5,8 @@
  *
  * Output goes through the same `validateQuest` pipeline as Gemini output.
  */
-import type { CollectibleTheme, Difficulty, Landmark, LandmarkCategory, Quest, Rarity } from '../types';
+import type { CollectibleTheme, Difficulty, Landmark, LandmarkCategory, LatLng, Quest, Rarity } from '../types';
+import { distanceMeters } from './geo';
 import { clampText } from '../utils/format';
 import { stableHash, validateQuest, type RawQuest } from './questSchema';
 import { BASE_XP } from './progression';
@@ -372,4 +373,75 @@ export function generateLocalQuests(landmarks: Landmark[], opts: GenerateOptions
     }
   }
   return out;
+}
+
+const DEMO_QUESTS: Array<{ title: string; description: string; instructions: string[]; evidence: string; theme: CollectibleTheme; pin: string }> = [
+  {
+    title: 'Find a Book (demo)',
+    description: 'Look for a book, magazine, or printed page you can see without leaving this public area.',
+    instructions: ['Stay in the public area of this place.', 'Find a book, magazine, or printed page.', 'Photograph the cover or a page. Leave it where it is.'],
+    evidence: 'A photo of a book, magazine, or printed page.',
+    theme: 'culture',
+    pin: 'Demo Bookmark',
+  },
+  {
+    title: 'Read a Sign (demo)',
+    description: 'Find a public sign or plaque and photograph the words you can read from the path.',
+    instructions: ['Look for a sign, plaque, or posted notice.', 'Read it from the public path.', 'Photograph the words without blocking anyone.'],
+    evidence: 'A photo of a public sign or plaque.',
+    theme: 'neighborhood',
+    pin: 'Demo Notice',
+  },
+  {
+    title: 'Spot a Seat (demo)',
+    description: 'Find a bench, ledge, or chair that is already there and photograph it. Do not move it.',
+    instructions: ['Find a bench, ledge, or chair in the public area.', 'Leave it exactly where it is.', 'Photograph the seat from the path.'],
+    evidence: 'A photo of a bench, ledge, or chair.',
+    theme: 'architecture',
+    pin: 'Demo Seat',
+  },
+];
+
+/** Three short solo quests for a walkthrough. Titles end with " (demo)". */
+export function demoQuestsForLandmark(landmark: Landmark): Quest[] {
+  const byId = new Map([[landmark.id, landmark]]);
+  const out: Quest[] = [];
+  for (const demo of DEMO_QUESTS) {
+    const result = validateQuest(
+      {
+        landmarkId: landmark.id,
+        title: demo.title,
+        description: demo.description,
+        instructions: demo.instructions,
+        mode: 'solo',
+        durationMin: 5,
+        difficulty: 'easy',
+        xp: BASE_XP.easy,
+        collectible: { theme: demo.theme, rarity: 'common', name: demo.pin },
+        evidence: demo.evidence,
+        safetyNotes: ['Stay on the public path. Do not touch or move anything.'],
+      },
+      byId,
+      'local',
+    );
+    if (result.ok) out.push(result.quest);
+  }
+  return out;
+}
+
+/** Keep the live quest list, and add the demo set on the landmark closest to the player. */
+export function withDemoQuests(landmarks: Landmark[], quests: Quest[], center: LatLng): Quest[] {
+  const first = landmarks[0];
+  if (!first) return quests;
+  let nearest: Landmark = first;
+  let best = distanceMeters(center, nearest.coordinate);
+  for (const lm of landmarks) {
+    const d = distanceMeters(center, lm.coordinate);
+    if (d < best) {
+      best = d;
+      nearest = lm;
+    }
+  }
+  const have = new Set(quests.map((q) => q.id));
+  return [...quests, ...demoQuestsForLandmark(nearest).filter((q) => !have.has(q.id))];
 }

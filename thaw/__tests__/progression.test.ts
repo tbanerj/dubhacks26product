@@ -130,6 +130,11 @@ describe('applyCompletion', () => {
     expect(second.progress.collectibles).toHaveLength(1);
   });
 
+  it('gives solo quests no party bonus even if a party size is sent', () => {
+    const { reward } = applyCompletion(emptyProgress(), { quest: quest({ mode: 'solo' }), landmarkName: 'Park', partySize: 4, now });
+    expect(reward?.xpGained).toBe(60 + FIRST_VISIT_BONUS);
+  });
+
   it('adds a capped party bonus', () => {
     expect(partyBonus(1)).toBe(0);
     expect(partyBonus(3)).toBe(20);

@@ -5,27 +5,31 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
-    "backgroundColor": "#FFF7E8",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F8F8F3",
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
         "NSLocationWhenInUseUsageDescription": "Thaw uses your approximate location to show quests and public landmarks near you. You can also explore a sample city instead.",
         "NSCameraUsageDescription": "Thaw uses the camera so you can photograph a landmark detail as quest evidence.",
         "NSPhotoLibraryUsageDescription": "Thaw lets you pick a photo of a landmark detail as quest evidence."
-      }
+      },
+      "bundleIdentifier": "com.tbanerj.thaw"
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFF7E8",
+        "backgroundColor": "#F8F8F3",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
-        "ACCESS_FINE_LOCATION",
-        "CAMERA"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ],
       "predictiveBackGestureEnabled": false
     },
@@ -38,7 +42,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFF7E8",
+          "backgroundColor": "#F8F8F3",
           "image": "./assets/splash-icon.png",
           "imageWidth": 160
         }
@@ -57,6 +61,7 @@
         }
       ],
       "expo-status-bar"
-    ]
+    ],
+    "scheme": "thaw"
   }
 }

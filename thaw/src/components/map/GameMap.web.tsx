@@ -41,9 +41,27 @@ function GameMapWeb({ player, hubs, selectedId, onSelectHub }: GameMapProps) {
 
   const me = project(player.coordinate);
 
+  const selectNearest = (x: number, y: number) => {
+    let best: { id: string; d: number } | null = null;
+    for (const h of hubs) {
+      const p = project(h.landmark.coordinate);
+      const d = Math.hypot(p.x - x, p.y - y);
+      if (!best || d < best.d) best = { id: h.landmark.id, d };
+    }
+    if (best && best.d < 88) onSelectHub(best.id);
+  };
+
   return (
     <View style={StyleSheet.absoluteFill} onLayout={(e) => setSize({ w: e.nativeEvent.layout.width, h: e.nativeEvent.layout.height })}>
-      <Svg width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
+      <Pressable
+        accessible={false}
+        style={StyleSheet.absoluteFill}
+        onPress={(e) => {
+          const ne = e.nativeEvent as { locationX?: number; locationY?: number; offsetX?: number; offsetY?: number };
+          selectNearest(ne.locationX ?? ne.offsetX ?? 0, ne.locationY ?? ne.offsetY ?? 0);
+        }}
+      />
+      <Svg pointerEvents="none" width={size.w} height={size.h} style={StyleSheet.absoluteFill}>
         <Rect x={0} y={0} width={size.w} height={size.h} fill="#F3E4C6" />
         {/* decorative streets & parks – illustrative only */}
         <Path d={`M0 ${size.h * 0.3} C ${size.w * 0.3} ${size.h * 0.25}, ${size.w * 0.6} ${size.h * 0.4}, ${size.w} ${size.h * 0.33}`} stroke="#FFF9EE" strokeWidth={18} fill="none" />

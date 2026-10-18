@@ -34,16 +34,26 @@ interface CacheEntry<T> {
 }
 
 /** Small TTL cache on top of AsyncStorage (used for place lookups). */
-export async function cacheGet<T>(key: string, ttlMs: number): Promise<T | null> {
+async function readCache<T>(key: string): Promise<CacheEntry<T> | null> {
   try {
     const raw = await AsyncStorage.getItem(`thaw-cache:${key}`);
     if (!raw) return null;
-    const entry = JSON.parse(raw) as CacheEntry<T>;
-    if (Date.now() - entry.at > ttlMs) return null;
-    return entry.value;
+    return JSON.parse(raw) as CacheEntry<T>;
   } catch {
     return null;
   }
+}
+
+export async function cacheGet<T>(key: string, ttlMs: number): Promise<T | null> {
+  const entry = await readCache<T>(key);
+  if (!entry || Date.now() - entry.at > ttlMs) return null;
+  return entry.value;
+}
+
+/** Last successful value, even past the TTL. Used when a live refresh fails. */
+export async function cacheGetStale<T>(key: string): Promise<T | null> {
+  const entry = await readCache<T>(key);
+  return entry?.value ?? null;
 }
 
 export async function cacheSet<T>(key: string, value: T): Promise<void> {

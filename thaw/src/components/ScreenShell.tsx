@@ -1,11 +1,12 @@
 import React from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View, type ScrollViewProps } from 'react-native';
+import { ScrollView, StyleSheet, Text, useWindowDimensions, View, type ScrollViewProps } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors, spacing, type } from '../theme/tokens';
+import { useTheme } from '../theme/useTheme';
+import { tabBarOffset } from '../navigation/TabBar';
+import { IconButton } from './Button';
 
-/** Paper-background screen with a playful header. `tab` screens leave room for the tab bar. */
+/** Screen container and header. Tab screens leave room for the bar. */
 export function ScreenShell({
   title,
   subtitle,
@@ -16,6 +17,9 @@ export function ScreenShell({
   scroll = true,
   contentStyle,
   keyboardShouldPersistTaps,
+  footer,
+  center,
+  bottomInset = true,
 }: {
   title: string;
   subtitle?: string;
@@ -26,60 +30,71 @@ export function ScreenShell({
   scroll?: boolean;
   contentStyle?: ScrollViewProps['contentContainerStyle'];
   keyboardShouldPersistTaps?: ScrollViewProps['keyboardShouldPersistTaps'];
+  footer?: React.ReactNode;
+  center?: boolean;
+  bottomInset?: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const nav = useNavigation();
-  const header = (
-    <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-      {back && (
-        <Pressable onPress={() => nav.goBack()} style={styles.back} accessibilityRole="button" accessibilityLabel="Go back" hitSlop={8}>
-          <MaterialCommunityIcons name="arrow-left" size={24} color={colors.ink} />
-        </Pressable>
-      )}
-      <View style={{ flex: 1 }}>
-        <Text style={type.title} accessibilityRole="header" numberOfLines={2}>
-          {title}
-        </Text>
-        {subtitle ? <Text style={type.small}>{subtitle}</Text> : null}
-      </View>
-      {right}
-    </View>
-  );
-  const bottomPad = (tab ? 110 : spacing.xl) + insets.bottom;
+  const { width } = useWindowDimensions();
+  const { colors, spacing, type } = useTheme();
+  const gutter = Math.max(spacing.screen, insets.left, insets.right);
+  const wide = width >= 700;
+  const column = [styles.column, wide ? styles.columnWide : null];
+  const bottomPad = footer ? spacing.lg : tab ? tabBarOffset(insets.bottom) : spacing.xl + insets.bottom;
+  const backTop = insets.top + 4;
+  const sideLead = back && center ? gutter + 44 + 8 : gutter;
   return (
-    <View style={styles.root}>
-      <View style={styles.blobA} />
-      <View style={styles.blobB} />
-      {header}
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
+      <View
+        style={[
+          styles.header,
+          column,
+          {
+            paddingTop: back ? (center ? backTop : backTop + 44 + 8) : insets.top + spacing.xs,
+            minHeight: back && center ? backTop + 44 : undefined,
+            paddingLeft: sideLead,
+            paddingRight: back && center ? gutter + 44 + 8 : gutter,
+          },
+        ]}
+      >
+        <View style={{ flex: 1, alignItems: center ? 'center' : 'flex-start' }}>
+          <Text style={type.title} accessibilityRole="header" numberOfLines={2}>
+            {title}
+          </Text>
+          {subtitle ? (
+            <Text style={type.small} numberOfLines={1}>
+              {subtitle}
+            </Text>
+          ) : null}
+        </View>
+        {right}
+      </View>
+      {back ? (
+        <View pointerEvents="box-none" style={[styles.backFloat, { top: backTop, left: Math.max(insets.left, 16) }]}>
+          <IconButton icon="chevron-left" label="Go back" glass glassVariant="regular" onPress={() => nav.goBack()} />
+        </View>
+      ) : null}
       {scroll ? (
         <ScrollView
-          contentContainerStyle={[{ padding: spacing.lg, paddingBottom: bottomPad, gap: spacing.lg }, contentStyle]}
+          contentContainerStyle={[{ paddingHorizontal: gutter, paddingBottom: bottomPad + insets.bottom, alignItems: wide ? 'center' : undefined }, contentStyle]}
           keyboardShouldPersistTaps={keyboardShouldPersistTaps}
         >
-          {children}
+          <View style={[column, { gap: spacing.md }]}>{children}</View>
         </ScrollView>
       ) : (
-        <View style={[{ flex: 1, paddingBottom: tab ? 100 + insets.bottom : insets.bottom }]}>{children}</View>
+        <View style={[{ flex: 1, paddingBottom: tab ? tabBarOffset(insets.bottom) : bottomInset ? insets.bottom : 0 }, column]}>{children}</View>
       )}
+      {footer ? <View style={[styles.footer, column, { paddingBottom: Math.max(insets.bottom, 12), paddingHorizontal: gutter, backgroundColor: colors.bg, borderColor: colors.border }]}>{footer}</View> : null}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: colors.paper, overflow: 'hidden' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, paddingHorizontal: spacing.lg, paddingBottom: spacing.sm },
-  back: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2,
-    borderBottomWidth: 3,
-    borderColor: colors.ink,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Soft paper-cut shapes in the background give screens some warmth.
-  blobA: { position: 'absolute', top: -60, right: -70, width: 220, height: 220, borderRadius: 110, backgroundColor: colors.butterSoft },
-  blobB: { position: 'absolute', bottom: 80, left: -90, width: 200, height: 200, borderRadius: 100, backgroundColor: colors.grassSoft, opacity: 0.6 },
+  root: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 8, width: '100%' },
+  column: { width: '100%' },
+  columnWide: { maxWidth: 640, alignSelf: 'center' },
+  backFloat: { position: 'absolute', zIndex: 30, elevation: 12 },
+  footer: { paddingTop: 12, gap: 8, borderTopWidth: StyleSheet.hairlineWidth, width: '100%' },
 });

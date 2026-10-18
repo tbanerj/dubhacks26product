@@ -26,8 +26,13 @@ export function confirmLink(runtime: Runtime, appUserId: string): { ok: true; ma
   }
   const identity = runtime.store.findIdentityById(token.messaging_identity_id);
   if (!identity) return { ok: false, error: "That chat could not be found." };
+  if (identity.linked_app_user && identity.linked_app_user !== appUserId) {
+    runtime.store.setLinkState(token.id, "rejected");
+    return { ok: false, error: "This chat is already linked to another Thaw account. Both histories were kept." };
+  }
   runtime.store.linkIdentity(identity.id, appUserId);
   runtime.store.setLinkState(token.id, "redeemed");
+  runtime.store.markPlayerRewardsPending(identity.player_id);
   return { ok: true, maskedSender: maskSender(identity.sender_id) };
 }
 
