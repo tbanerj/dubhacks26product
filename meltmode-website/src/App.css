@@ -1,0 +1,172 @@
+/* ===== Header (glass) ===== */
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--bg); /* solid fallback */
+  border-bottom: 1px solid var(--border);
+}
+@supports ((backdrop-filter: blur(16px)) or (-webkit-backdrop-filter: blur(16px))) {
+  .site-header {
+    background: var(--glass-bg);
+    -webkit-backdrop-filter: blur(16px);
+    backdrop-filter: blur(16px);
+    border-bottom-color: rgba(231, 232, 223, 0.7);
+    box-shadow: var(--glass-shadow);
+  }
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-4);
+  min-height: 72px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.site-nav { display: flex; gap: var(--s-1); }
+
+.nav-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--s-3);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--text-soft);
+  white-space: nowrap;
+  border-bottom: 2px solid transparent;
+  transition: color var(--t), border-color var(--t);
+}
+.nav-link:hover { color: var(--text); }
+.nav-link.active { color: var(--brand); border-bottom-color: var(--brand); }
+
+/* ===== Simple page layout (kept for any placeholder pages) ===== */
+.page-placeholder {
+  min-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--s-4);
+  padding-top: var(--s-8);
+  padding-bottom: var(--s-8);
+}
+.page-placeholder h1 { font-size: clamp(36px, 6vw, 56px); }
+.page-placeholder p { color: var(--text-soft); }
+
+/* ===== Footer ===== */
+.site-footer {
+  background: var(--brand-dark);
+  color: var(--bg);
+  padding: var(--s-8) 0 var(--s-6);
+  margin-top: var(--s-9);
+}
+.site-footer :focus-visible { outline-color: var(--amber); }
+
+.footer-inner {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 1fr;
+  gap: var(--s-6);
+}
+.footer-brand .brand { color: var(--bg); }
+.footer-brand p {
+  margin-top: var(--s-3);
+  max-width: 280px;
+  font-size: 15px;
+  color: rgba(248, 248, 243, 0.78);
+}
+
+.footer-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  font-size: 15px;
+  color: rgba(248, 248, 243, 0.82);
+}
+.footer-col h3 {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+.footer-col a { text-decoration: none; transition: color var(--t); }
+.footer-col a:hover { color: var(--amber); }
+
+/* Team names link to LinkedIn */
+.team-link {
+  color: var(--bg);
+  text-decoration: underline;
+  text-decoration-color: var(--amber);
+  text-underline-offset: 4px;
+}
+.team-link:hover { color: var(--amber); }
+
+.footer-bottom {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  margin-top: var(--s-7);
+  padding-top: var(--s-5);
+  border-top: 1px solid rgba(248, 248, 243, 0.15);
+  font-size: 13px;
+  color: rgba(248, 248, 243, 0.75);
+}
+.footer-bottom a { color: rgba(248, 248, 243, 0.85); transition: color var(--t); }
+.footer-bottom a:hover { color: var(--amber); }
+
+/* ===== Privacy policy page ===== */
+.legal {
+  max-width: 760px;
+  padding-top: var(--s-8);
+  padding-bottom: var(--s-6);
+}
+.legal h1 { font-size: clamp(36px, 6vw, 52px); margin-top: var(--s-3); }
+.legal h2 { font-size: 22px; margin: var(--s-7) 0 var(--s-3); }
+.legal p, .legal li { color: var(--text-soft); }
+.legal ul { padding-left: var(--s-5); margin: 0; display: grid; gap: var(--s-3); }
+.legal strong { color: var(--text); }
+.legal-date { margin-top: var(--s-2); font-size: 15px; }
+
+.legal-summary {
+  margin-top: var(--s-6);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-card);
+  padding: var(--s-5) var(--s-6);
+}
+.legal-summary h2 { margin-top: 0; }
+.legal-summary li { color: var(--text-muted); }
+
+/* ===== Phones and small screens ===== */
+@media (max-width: 760px) {
+  .header-inner {
+    flex-wrap: wrap;
+    padding-top: var(--s-3);
+    padding-bottom: var(--s-2);
+  }
+  .site-nav {
+    width: 100%;
+    overflow-x: auto;
+    margin: 0 calc(var(--s-3) * -1);
+    padding: 0 var(--s-1);
+  }
+  .footer-inner { grid-template-columns: 1fr 1fr; gap: var(--s-5); }
+  .footer-brand { grid-column: 1 / -1; }
+  .legal-summary { padding: var(--s-5); }
+}
