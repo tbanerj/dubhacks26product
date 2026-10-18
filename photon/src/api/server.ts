@@ -4,6 +4,7 @@ import { confirmLink, issueLinkCode, progressForLinkedUser } from "../game/linki
 import { syncPendingRewards } from "../game/sync.ts";
 import { nextPromptInstant, scheduleFromPreference } from "../messaging/scheduler.ts";
 import * as prompts from "../conversation/prompts.ts";
+import { createSignupLimiter, publicSignupResponse } from "./signup.ts";
 
 const USER_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -12,11 +13,19 @@ const USER_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
  * when THAW_DEV_API=1. It is not a production credential.
  */
 export function startApi(runtime: Runtime): ReturnType<typeof Bun.serve> {
+  const signupLimiter = createSignupLimiter();
   return Bun.serve({
     port: runtime.config.port,
     hostname: runtime.config.apiHost,
-    async fetch(request) {
+    async fetch(request, server) {
       const url = new URL(request.url);
+      if (request.method === "POST" && url.pathname === "/api/public/signup") {
+        const address = server.requestIP(request)?.address ?? "unknown";
+        return publicSignupResponse(request, runtime.config, {
+          clientKey: address,
+          limiter: signupLimiter,
+        });
+      }
       if (request.method === "GET" && url.pathname === "/health") return json({ ok: true });
       if (request.method === "GET" && url.pathname === "/ready") {
         return json({

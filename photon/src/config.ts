@@ -40,6 +40,8 @@ export interface Config {
   outboxMaxAttempts: number;
   /** A scheduled prompt older than this is skipped instead of sent late. */
   promptGraceMs: number;
+  /** Exact Origin values allowed to call the public text signup route. */
+  signupAllowedOrigins: readonly string[];
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
@@ -93,7 +95,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     linkMaxFailures: 5,
     outboxMaxAttempts: 5,
     promptGraceMs: 2 * 60 * 60 * 1000,
+    signupAllowedOrigins: parseOrigins(env.THAW_SIGNUP_ALLOWED_ORIGINS),
   };
+}
+
+/** Local Vite dev server. Used when THAW_SIGNUP_ALLOWED_ORIGINS is unset. */
+export const DEFAULT_SIGNUP_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"] as const;
+
+function parseOrigins(value: string | undefined): string[] {
+  const raw = blank(value);
+  if (!raw) return [...DEFAULT_SIGNUP_ORIGINS];
+  const origins = raw.split(",").map((origin) => origin.trim()).filter(Boolean);
+  return origins.length > 0 ? origins : [...DEFAULT_SIGNUP_ORIGINS];
 }
 
 function parseTransport(value: string | undefined, hasProject: boolean): TransportMode {

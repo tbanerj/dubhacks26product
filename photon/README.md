@@ -32,7 +32,8 @@ Copy `.env.example` to `.env` if you do not already have one. For live iMessage,
 | `THAW_VERIFIER` | Server | `demo` only. `live` refuses to start. |
 | `THAW_DATABASE_PATH` | Server | SQLite file. Default `data/thaw.sqlite`. |
 | `THAW_MEDIA_DIR` | Server | Private photo files. Default `data/media`. |
-| `PORT` | Server | Local API, default `3001`, bound to `127.0.0.1`. |
+| `PORT` | Server | Local API, default `3001`, bound to `THAW_API_HOST` (`127.0.0.1` by default). |
+| `THAW_SIGNUP_ALLOWED_ORIGINS` | Server | Exact `Origin` values for `POST /api/public/signup`, comma-separated. Unset allows only the local Vite origins `http://localhost:5173` and `http://127.0.0.1:5173`. |
 | `THAW_DEV_API` | Server | `1` enables the development linking header. Photon mode leaves this off unless you set it. |
 | `THAW_*` image and timezone settings | Server | Limits and the default timezone `America/Los_Angeles`. Thaw does not guess a timezone from a phone number. |
 
@@ -59,11 +60,23 @@ Demo CLI commands: `/as ada`, `/as ben`, `/scenario success|mismatch|unavailable
 1. Stop any older `bun start` so only one stream is connected.
 2. Run `bun start` from this folder.
 3. In the Photon dashboard, open the project's iMessage line. On a shared plan, different people can be routed through different numbers. Do not hardcode one number.
-4. Shared plans must list each opted-in tester as a project user before Thaw can reply. Adding a Thaw profile does not do this. If a reply fails with `Target not allowed for this project`, add that phone or email on the dashboard and text again.
+4. Shared plans must list each opted-in tester as a project user before Thaw can reply. The website signup route does that registration. Adding a Thaw profile does not. If a reply fails with `Target not allowed for this project`, the phone was not registered; sign up again or add that phone on the dashboard, then text again.
 5. Text the line: a place, then `1`, `2`, or `3`, then one JPEG or PNG.
 6. The result starts with `Demo verification` until a real checker is configured.
 
 Group chats are ignored. Thaw does not read or share anyone's live location.
+
+## Website signup on the Free plan
+
+Photon Free uses a shared pool of iMessage numbers, not a dedicated Business line. A shared line refuses to message anyone who is not a project user (`Target not allowed for this project`).
+
+`POST /api/public/signup` is the Free-plan registration. It calls Stable Spectrum `POST /projects/{projectId}/users/` with `{ "type": "shared", "phoneNumber": "<E.164>" }`. Spectrum records that phone as a project user and assigns one pool number in `assignedPhoneNumber`. The same phone submitted again returns the same assignment. This service does not store the phone and does not send a message.
+
+The website button is an `sms:` link to that assigned number. The person texts it from the phone they registered. The listener in this process replies with the quest welcome. Leave `bun start` running; a request that returns immediately cannot hold the iMessage stream.
+
+`type: "dedicated"` is the Business-line API and is not used. Do not hardcode one Thaw number: on a shared plan each person can be routed through a different pool number.
+
+If the project's shared-user cap is full, Spectrum rejects the create and the site shows signup unavailable. Raise the cap or remove an old user in the Photon dashboard. Set `THAW_SIGNUP_ALLOWED_ORIGINS` to the public site origin before exposing the route through a reverse proxy. Keep this process on `127.0.0.1`.
 
 ## Photos
 
@@ -87,7 +100,7 @@ XP and collectibles are written in one database transaction. Each quest pays onc
 
 The Expo app screen is Settings → Play by text. It sends the signed-in Supabase access token to this API. With `THAW_DEV_API=1`, local tests can still send `x-thaw-dev-user`. That header is not production login.
 
-- `GET /health` and `GET /ready` (no auth)
+- `GET /health`, `GET /ready`, and `POST /api/public/signup` (no auth)
 - `GET /api/me/messaging` and `GET /api/me/progress`
 - `POST /api/me/messaging/link-token` (and `/link`) issues an 8-character code for 10 minutes
 - text `LINK` and that code
