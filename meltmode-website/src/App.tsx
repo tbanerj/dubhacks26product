@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import './App.css'
 import Home from './pages/Home'
 import Demo from './pages/Demo'
 import Download from './pages/Download'
 import ByText from './pages/ByText'
 import Privacy from './pages/Privacy'
+import { scene, startFrost } from './lib/frost'
+import { reducedMotion, scrollToTop, ScrollTrigger } from './lib/smooth'
 
 // The menu. "path" is what shows after the # in the web address,
 // for example yoursite.com/#/demo
@@ -12,19 +14,18 @@ const PAGES = [
   { path: '/', label: 'Home' },
   { path: '/demo', label: 'Demo' },
   { path: '/download', label: 'Download' },
-  { path: '/text', label: 'Get it by text' },
+  { path: '/text', label: 'Play by text' },
 ]
-
-// Reads which page we're on from the web address
-
 
 // Your team. Put each person's name and LinkedIn web address
 // between the quotes. Leave an address empty ('') to show just the name.
 const TEAM = [
-  { name: 'Ryan Panda', linkedin: 'https://www.linkedin.com/in/ryan-panda-5b021a352/?lipi=urn%3Ali%3Apage%3Ad_flagship3_profile_view_base_contact_details%3BVmS5Ce%2FuTaKnli1m0zxqMg%3D%3D' },
+  { name: 'Ryan Panda', linkedin: 'https://www.linkedin.com/in/ryan-panda-5b021a352/' },
   { name: 'Thanika Puhazholi', linkedin: 'https://www.linkedin.com/in/thanikapuhazholi' },
   { name: 'Trinav Banerjee', linkedin: 'https://www.linkedin.com/in/trinavbanerjee' },
 ]
+
+// Reads which page we're on from the web address
 function getPath() {
   const path = window.location.hash.replace('#', '')
   return path === '' ? '/' : path
@@ -46,40 +47,72 @@ function renderPage(path: string) {
   }
 }
 
-// The MeltMode logo: a gold tile with a melting drop (original artwork)
-function Logo() {
+// The MeltMode mark: a drop that's still ice on top and warm where it's melting
+export function Logo({ size = 28 }: { size?: number }) {
   return (
-    <svg width="36" height="36" viewBox="0 0 36 36" aria-hidden="true">
-      <rect width="36" height="36" rx="11" fill="#245C46" />
-      <path d="M18 7c4.5 6.5 7.5 10 7.5 14.5a7.5 7.5 0 0 1-15 0C10.5 17 13.5 13.5 18 7z" fill="#F8F8F3" />
-      <circle cx="15.5" cy="21.5" r="2" fill="#F4D06F" />
+    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true">
+      <defs>
+        <linearGradient id="logo-melt" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0.45" stopColor="currentColor" />
+          <stop offset="0.75" stopColor="#FFB84D" />
+          <stop offset="1" stopColor="#E8497F" />
+        </linearGradient>
+      </defs>
+      <path d="M32 6c9.5 13 15.5 20.5 15.5 30a15.5 15.5 0 0 1-31 0C16.5 26.5 22.5 19 32 6z" fill="url(#logo-melt)" />
     </svg>
   )
 }
 
 export default function App() {
   const [path, setPath] = useState(getPath())
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [hasGL, setHasGL] = useState(true)
 
   // When the web address changes (a menu click or the Back button), show the new page
   useEffect(() => {
     const onChange = () => {
       setPath(getPath())
-      window.scrollTo(0, 0)
+      scrollToTop()
     }
     window.addEventListener('hashchange', onChange)
     return () => window.removeEventListener('hashchange', onChange)
   }, [])
 
+  // The frost background lives behind every page
+  useEffect(() => {
+    const stop = startFrost(canvasRef.current!, reducedMotion)
+    if (!stop) setHasGL(false)
+    return () => stop?.()
+  }, [])
+
+  // Subpages sit on the frozen, dark version; the home page takes over these itself
+  useEffect(() => {
+    if (path === '/') return
+    scene.melt = 0
+    scene.lit = 0
+    scene.active = true
+    scene.origin = { x: 0.5, y: 0.35 }
+    document.documentElement.dataset.tone = 'dark'
+    document.documentElement.style.removeProperty('--bg')
+    document.documentElement.style.removeProperty('--fg')
+    requestAnimationFrame(() => ScrollTrigger.refresh())
+  }, [path])
+
+  const isHome = path === '/'
+
   return (
     <>
+      <canvas ref={canvasRef} className="frost-canvas" aria-hidden="true" />
+      {!hasGL && <div className="frost-fallback" aria-hidden="true" />}
+
       <header className="site-header">
-        <div className="container header-inner">
+        <div className="header-inner">
           <a href="#/" className="brand" aria-label="MeltMode home">
             <Logo />
             <span>MeltMode</span>
           </a>
           <nav className="site-nav" aria-label="Main">
-            {PAGES.map((page) => (
+            {PAGES.slice(1).map((page) => (
               <a
                 key={page.path}
                 href={'#' + page.path}
@@ -90,53 +123,47 @@ export default function App() {
               </a>
             ))}
           </nav>
+          <a className="header-cta" href="#/demo">Play a quest</a>
         </div>
       </header>
 
-      <main>{renderPage(path)}</main>
+      <main className={isHome ? 'main-home' : 'main-sub'}>{renderPage(path)}</main>
 
       <footer className="site-footer">
-        <div className="container footer-inner">
-          <div className="footer-brand">
-            <div className="brand">
-              <Logo />
-              <span>MeltMode</span>
-            </div>
-            <p>Real-world quests that turn strangers into friends.</p>
+        <div className="container">
+          <div className="footer-mark">
+            <Logo size={44} />
+            <p>Real-world quests that turn strangers into friends. Made in Seattle.</p>
           </div>
-
-          <div className="footer-col">
-            <h3>Explore</h3>
-            {PAGES.map((page) => (
-              <a key={page.path} href={'#' + page.path}>
-                {page.label}
-              </a>
-            ))}
-          </div>
-
+          <div className="footer-cols">
             <div className="footer-col">
-            <h3>The team</h3>
-            {TEAM.map((person) =>
-              person.linkedin ? (
-                <a key={person.name} href={person.linkedin} target="_blank" rel="noreferrer" className="team-link">
-                  {person.name}
-                </a>
-              ) : (
-                <span key={person.name}>{person.name}</span>
-              )
-            )}
+              <h3>Explore</h3>
+              {PAGES.map((page) => (
+                <a key={page.path} href={'#' + page.path}>{page.label}</a>
+              ))}
+            </div>
+            <div className="footer-col">
+              <h3>The team</h3>
+              {TEAM.map((person) =>
+                person.linkedin ? (
+                  <a key={person.name} href={person.linkedin} target="_blank" rel="noreferrer">{person.name}</a>
+                ) : (
+                  <span key={person.name}>{person.name}</span>
+                )
+              )}
+            </div>
+            <div className="footer-col">
+              <h3>Contact</h3>
+              <a href="mailto:trinavbanerjee@gmail.com">trinavbanerjee@gmail.com</a>
+            </div>
           </div>
-
-          <div className="footer-col">
-            <h3>Contact</h3>
-            <a href="mailto:trinavbanerjee@gmail.com">trinavbanerjee@gmail.com</a>
+          <div className="footer-word" aria-hidden="true">MeltMode</div>
+          <div className="footer-bottom">
+            <span>© 2026 MeltMode</span>
+            <a href="#/privacy">Privacy policy</a>
           </div>
         </div>
-        <div className="container footer-bottom">
-          <span>© 2026 MeltMode. All rights reserved.</span>
-          <a href="#/privacy">Privacy policy</a>
-        </div>      
-        </footer>
+      </footer>
     </>
   )
 }

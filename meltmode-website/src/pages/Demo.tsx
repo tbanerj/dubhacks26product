@@ -59,8 +59,8 @@ const QUESTS: Quest[] = [
 
 // Fictional demo players, clearly labeled as such
 const DEMO_PLAYERS = [
-  { name: 'Rowan', color: '#245C46' },
-  { name: 'Mika', color: '#6B7771' },
+  { name: 'Rowan', color: '#FF7352' },
+  { name: 'Mika', color: '#6C5BD4' },
 ]
 
 const PHOTOS = [
@@ -72,37 +72,37 @@ const PHOTOS = [
 const STEP_NAMES = ['Discover', 'Team up', 'Complete', 'Rewards']
 const START_XP = 410
 const XP_PER_LEVEL = 500
-const CONFETTI_COLORS = ['#F4D06F', '#245C46', '#6B7771', '#DDECD0', '#3F7D4E']
+const CONFETTI_COLORS = ['#FFB84D', '#FF7352', '#E8497F', '#A9CBFF', '#F2F4F8']
 
 /* ---------- Illustrations ---------- */
 function PhotoArt({ id }: { id: number }) {
   if (id === 0) {
     return (
       <svg viewBox="0 0 120 90" aria-hidden="true">
-        <rect width="120" height="90" fill="#E7E8DF" />
-        <circle cx="96" cy="20" r="10" fill="#F4D06F" />
-        <path d="M30 90V45a30 30 0 0 1 60 0v45z" fill="#6B7771" />
-        <path d="M44 90V48a16 16 0 0 1 32 0v42z" fill="#DDECD0" />
+        <rect width="120" height="90" fill="#2B3550" />
+        <circle cx="96" cy="20" r="10" fill="#FFB84D" />
+        <path d="M30 90V45a30 30 0 0 1 60 0v45z" fill="#8A93A8" />
+        <path d="M44 90V48a16 16 0 0 1 32 0v42z" fill="#F7C9A5" />
       </svg>
     )
   }
   if (id === 1) {
     return (
       <svg viewBox="0 0 120 90" aria-hidden="true">
-        <rect width="120" height="90" fill="#F8F8F3" />
-        <ellipse cx="60" cy="72" rx="44" ry="12" fill="#DCE3DF" />
-        <rect x="52" y="34" width="16" height="38" rx="4" fill="#6B7771" />
-        <path d="M60 34c-14-4-22 6-26 16M60 34c14-4 22 6 26 16" stroke="#9FB5BA" strokeWidth="3" fill="none" />
+        <rect width="120" height="90" fill="#F59F8B" />
+        <ellipse cx="60" cy="72" rx="44" ry="12" fill="#7E5C8C" />
+        <rect x="52" y="34" width="16" height="38" rx="4" fill="#3C2B4D" />
+        <path d="M60 34c-14-4-22 6-26 16M60 34c14-4 22 6 26 16" stroke="#BFE0FF" strokeWidth="3" fill="none" />
       </svg>
     )
   }
   return (
     <svg viewBox="0 0 120 90" aria-hidden="true">
-      <rect width="120" height="90" fill="#DDECD0" />
-      <rect x="10" y="58" width="100" height="10" rx="4" fill="#6B7771" />
-      <rect x="20" y="68" width="8" height="18" fill="#6B7771" />
-      <rect x="92" y="68" width="8" height="18" fill="#6B7771" />
-      <path d="M50 56c0-18 14-28 30-28 0 18-12 28-30 28z" fill="#3F7D4E" />
+      <rect width="120" height="90" fill="#3A2F52" />
+      <rect x="10" y="58" width="100" height="10" rx="4" fill="#151821" />
+      <rect x="20" y="68" width="8" height="18" fill="#151821" />
+      <rect x="92" y="68" width="8" height="18" fill="#151821" />
+      <path d="M50 56c0-18 14-28 30-28 0 18-12 28-30 28z" fill="#FFB84D" />
     </svg>
   )
 }
@@ -110,25 +110,25 @@ function PhotoArt({ id }: { id: number }) {
 function PinArt({ id }: { id: QuestId }) {
   return (
     <svg viewBox="0 0 120 120" className="pin-art" aria-hidden="true">
-      <circle cx="60" cy="60" r="56" fill="#123A2D" />
-      <circle cx="60" cy="60" r="48" fill="#F4D06F" />
+      <circle cx="60" cy="60" r="56" fill="#15161A" />
+      <circle cx="60" cy="60" r="48" fill="#FF9A6B" />
       {id === 'lens' && (
         <>
-          <circle cx="60" cy="60" r="24" fill="#123A2D" />
-          <circle cx="60" cy="60" r="13" fill="#DDECD0" />
+          <circle cx="60" cy="60" r="24" fill="#15161A" />
+          <circle cx="60" cy="60" r="13" fill="#FFE2B8" />
           <circle cx="54" cy="54" r="4" fill="#FFFFFF" />
         </>
       )}
       {id === 'worlds' && (
         <>
-          <circle cx="50" cy="60" r="20" fill="#245C46" />
-          <circle cx="70" cy="60" r="20" fill="#6B7771" opacity="0.9" />
+          <circle cx="50" cy="60" r="20" fill="#E8497F" />
+          <circle cx="70" cy="60" r="20" fill="#6C5BD4" opacity="0.9" />
         </>
       )}
       {id === 'compass' && (
         <>
-          <path d="M60 26l9 34-9 34-9-34z" fill="#123A2D" />
-          <path d="M26 60l34-9 34 9-34 9z" fill="#245C46" />
+          <path d="M60 26l9 34-9 34-9-34z" fill="#15161A" />
+          <path d="M26 60l34-9 34 9-34 9z" fill="#E8497F" />
           <circle cx="60" cy="60" r="6" fill="#FFFFFF" />
         </>
       )}
@@ -259,7 +259,7 @@ export default function Demo() {
                   <span>3 of 4 spots filled</span>
                 </div>
                 <div className="lobby-player">
-                  <span className="avatar" style={{ background: '#F4D06F' }}>Y</span>
+                  <span className="avatar" style={{ background: '#2A2D35' }}>Y</span>
                   You <span className="ready">Ready</span>
                 </div>
                 {DEMO_PLAYERS.map((p, i) => (

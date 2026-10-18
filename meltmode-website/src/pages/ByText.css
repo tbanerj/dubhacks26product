@@ -1,89 +1,86 @@
 .text-page {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: var(--s-8);
+  gap: 72px;
   align-items: start;
-  padding-top: var(--s-8);
+  padding-bottom: 48px;
 }
 
-/* Left side */
-.text-intro { display: grid; gap: var(--s-4); }
-.text-intro h1 { font-size: clamp(36px, 5vw, 56px); }
-.text-lead { font-size: 18px; color: var(--text-soft); }
+.text-intro { display: grid; gap: 20px; }
+.text-intro h1 { font-size: clamp(48px, 6.4vw, 92px); letter-spacing: -0.03em; }
+.text-lead { font-size: 18px; color: var(--muted); max-width: 480px; }
 
-.text-steps { list-style: none; padding: 0; margin: var(--s-3) 0 0; display: grid; gap: var(--s-5); }
-.text-steps li { display: flex; gap: var(--s-4); align-items: flex-start; }
-.text-steps strong { font-size: 18px; }
-.text-steps p { color: var(--text-soft); font-size: 16px; }
+/* how it works is a real sequence, so it's numbered */
+.text-steps { list-style: none; padding: 0; margin: 16px 0 0; display: grid; gap: 22px; }
+.text-steps li { display: flex; gap: 16px; align-items: flex-start; }
+.text-steps strong { font-size: 17px; font-weight: 600; }
+.text-steps p { color: var(--muted); font-size: 16px; }
 .text-step-num {
-  flex: 0 0 40px;
-  height: 40px;
+  flex: 0 0 34px;
+  height: 34px;
   border-radius: 50%;
-  background: var(--brand);
-  color: var(--on-brand);
+  border: 1px solid var(--line);
   display: grid;
   place-items: center;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
 }
 
-/* Right side */
-.text-side { display: grid; gap: var(--s-5); }
+.text-side { display: grid; gap: 16px; }
 
 .chat {
-  background: var(--sage);
-  border-radius: var(--r-lg);
-  padding: var(--s-5);
+  background: #fff;
+  border-radius: 30px;
+  padding: 20px 16px;
   display: grid;
-  gap: 10px;
+  gap: 8px;
 }
 .bubble {
   max-width: 80%;
-  padding: var(--s-3) var(--s-4);
+  padding: 10px 14px;
   border-radius: 20px;
   font-size: 15px;
-  line-height: 1.45;
-  animation: bubbleIn 0.3s ease both;
+  line-height: 1.4;
+  animation: bubbleIn 0.4s var(--ease-out) both;
 }
-.bubble.them { background: var(--card); color: var(--text); border-bottom-left-radius: 6px; }
+.bubble.them { background: #E9E9EB; color: #15161A; border-bottom-left-radius: 6px; }
 .bubble.me {
   justify-self: end;
-  background: var(--brand);
-  color: var(--on-brand);
-  font-weight: 600;
+  background: var(--melt);
+  color: #1A0D08;
+  font-weight: 500;
   border-bottom-right-radius: 6px;
-  animation-delay: 0.4s;
+  animation-delay: 0.5s;
 }
-.bubble.them:last-child { animation-delay: 0.8s; }
+.bubble.them:last-child { animation-delay: 1s; }
 
-/* The form */
 .signup {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--r-card);
-  padding: var(--s-6);
-  box-shadow: var(--shadow-card);
+  background: rgba(10, 12, 16, 0.72);
+  border: 1px solid var(--line);
+  border-radius: 30px;
+  padding: 32px;
   display: grid;
-  gap: var(--s-3);
+  gap: 12px;
 }
-.signup h2 { font-size: 24px; margin-bottom: var(--s-1); }
-.signup label { font-weight: 600; font-size: 15px; }
+.signup h2 { font-size: 40px; margin-bottom: 4px; }
+.signup label { font-weight: 500; font-size: 15px; }
 .signup input[type='tel'] {
-  min-height: 52px;
-  padding: 0 var(--s-4);
-  border: 1.5px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--bg);
-  font: 500 17px var(--font);
-  color: var(--text);
+  min-height: 54px;
+  padding: 0 18px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--surface);
+  font: 500 17px var(--sans);
+  color: var(--fg);
   transition: border-color var(--t), box-shadow var(--t);
 }
-.signup input[type='tel']::placeholder { color: var(--text-muted); }
+.signup input[type='tel']::placeholder { color: var(--faint); }
 .signup input[type='tel']:focus-visible {
   outline: none;
-  border-color: var(--brand);
-  box-shadow: 0 0 0 3px rgba(36, 92, 70, 0.18);
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px rgba(255, 184, 77, 0.2);
 }
-.signup input:disabled { opacity: 0.6; cursor: not-allowed; }
+.signup input:disabled { opacity: 0.55; cursor: not-allowed; }
 
 .consent {
   display: flex;
@@ -92,28 +89,23 @@
   font-weight: 400 !important;
   font-size: 13px !important;
   line-height: 1.5;
-  color: var(--text-muted);
+  color: var(--muted);
 }
-.consent input {
-  width: 20px;
-  height: 20px;
-  margin: 0;
-  flex: 0 0 20px;
-  accent-color: var(--brand);
-}
-.consent a, .form-note a { color: var(--brand); font-weight: 600; text-underline-offset: 3px; }
+.consent input { width: 18px; height: 18px; margin: 1px 0 0; flex: 0 0 18px; accent-color: var(--amber); }
+.consent a, .form-note a { color: var(--fg); text-underline-offset: 3px; }
 
-.signup .btn { margin-top: var(--s-2); }
-.coming-soon-btn { cursor: default; }
+.signup .btn { margin-top: 8px; }
+.coming-soon-btn { background: var(--surface); color: var(--muted); border-color: var(--line); cursor: default; }
+.btn.coming-soon-btn:disabled { opacity: 1; }
 
-.form-note { font-size: 14px; color: var(--text-muted); }
-.form-message { font-size: 15px; font-weight: 600; padding: var(--s-3) var(--s-4); border-radius: var(--r-md); }
-.form-message.done { background: var(--success-soft); color: var(--success); }
-.form-message.error { background: var(--error-soft); color: var(--error); }
+.form-note { font-size: 14px; color: var(--muted); }
+.form-message { font-size: 15px; font-weight: 500; padding: 12px 16px; border-radius: 14px; }
+.form-message.done { background: rgba(123, 216, 143, 0.12); color: var(--ok); }
+.form-message.error { background: rgba(255, 138, 115, 0.12); color: var(--err); }
 
-@keyframes bubbleIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes bubbleIn { from { opacity: 0; transform: translateY(8px) scale(0.96); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 860px) {
-  .text-page { grid-template-columns: 1fr; gap: var(--s-6); }
-  .signup { padding: var(--s-5); }
+  .text-page { grid-template-columns: 1fr; gap: 40px; }
+  .signup { padding: 24px; }
 }

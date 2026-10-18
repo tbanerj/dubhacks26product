@@ -36,14 +36,14 @@ const PLATFORMS: Platform[] = [
 function PhoneIcon({ variant }: { variant: 'apple' | 'android' }) {
   return (
     <svg width="56" height="56" viewBox="0 0 56 56" aria-hidden="true">
-      <rect x="14" y="4" width="28" height="48" rx={variant === 'apple' ? 9 : 5} fill="#123A2D" />
-      <rect x="17" y="9" width="22" height="36" rx={variant === 'apple' ? 6 : 2} fill="#DDECD0" />
+      <rect x="14" y="4" width="28" height="48" rx={variant === 'apple' ? 9 : 5} fill="#000000" />
+      <rect x="17" y="9" width="22" height="36" rx={variant === 'apple' ? 6 : 2} fill="#A9CBFF" />
       {variant === 'apple' ? (
-        <rect x="23" y="11" width="10" height="3" rx="1.5" fill="#123A2D" />
+        <rect x="23" y="11" width="10" height="3" rx="1.5" fill="#000000" />
       ) : (
-        <circle cx="28" cy="12" r="1.6" fill="#123A2D" />
+        <circle cx="28" cy="12" r="1.6" fill="#000000" />
       )}
-      <circle cx="28" cy="28" r="6" fill="#F4D06F" />
+      <circle cx="28" cy="28" r="6" fill="#FFB84D" />
     </svg>
   )
 }
